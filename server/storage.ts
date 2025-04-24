@@ -11,13 +11,13 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  sessionStore: ReturnType<typeof createMemoryStore>;
+  sessionStore: any; // Using any for now to simplify typings
 }
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   currentId: number;
-  sessionStore: session.SessionStore;
+  sessionStore: any; // Using any for now to simplify typings
 
   constructor() {
     this.users = new Map();
@@ -74,7 +74,18 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentId++;
-    const user: User = { ...insertUser, id };
+    
+    // Ensure null values instead of undefined for nullable fields
+    const user: User = { 
+      ...insertUser, 
+      id,
+      fullName: insertUser.fullName || null,
+      email: insertUser.email || null,
+      location: insertUser.location || null,
+      skillsToTeach: insertUser.skillsToTeach || null,
+      skillsToLearn: insertUser.skillsToLearn || null
+    };
+    
     this.users.set(id, user);
     return user;
   }
