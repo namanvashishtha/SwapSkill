@@ -1,11 +1,11 @@
 import { useLocation } from "wouter";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/home/footer";
-import SignupForm from "@/components/auth/signup-form";
-import LoginForm from "@/components/auth/login-form";
+import AuthForm from "@/components/AuthForm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 import { useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();
@@ -29,20 +29,7 @@ export default function AuthPage() {
                   Join SwapSkill
                 </h2>
                 
-                <Tabs defaultValue="signup" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
-                    <TabsTrigger value="signup">Sign Up</TabsTrigger>
-                    <TabsTrigger value="login">Login</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="signup">
-                    <SignupForm />
-                  </TabsContent>
-                  
-                  <TabsContent value="login">
-                    <LoginForm />
-                  </TabsContent>
-                </Tabs>
+                <AuthForm isSignup={true} />
               </div>
               
               {/* Right side: Hero content */}

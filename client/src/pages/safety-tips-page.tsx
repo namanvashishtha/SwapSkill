@@ -4,7 +4,7 @@ export default function SafetyTipsPage() {
   return (
     <PlaceholderPage 
       title="Safety Tips" 
-      description="Guidelines to ensure your skill-sharing experience is safe and positive" 
+      description="Guidelines for safe and secure skill-sharing on SwapSkill" 
     />
   );
 }

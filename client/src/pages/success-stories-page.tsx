@@ -4,7 +4,7 @@ export default function SuccessStoriesPage() {
   return (
     <PlaceholderPage 
       title="Success Stories" 
-      description="Real stories from our community members who have transformed their lives through skill sharing" 
+      description="Read about how SwapSkill has helped people learn and grow" 
     />
   );
 }
