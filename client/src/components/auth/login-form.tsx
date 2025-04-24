@@ -44,14 +44,34 @@ export default function LoginForm() {
     setIsLoading(true);
     setError(null);
     
-    // Simulate login - in a real app, this would call the API
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({
-        title: "Coming soon",
-        description: "Authentication system is under development",
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
       });
-    }, 1500);
+      
+      if (response.ok) {
+        const user = await response.json();
+        toast({
+          title: "Success",
+          description: `Welcome back, ${user.username}!`,
+        });
+        
+        // Redirect to home page after successful login
+        window.location.href = '/';
+      } else {
+        const errorData = await response.text();
+        setError(errorData || 'Login failed. Please check your credentials.');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

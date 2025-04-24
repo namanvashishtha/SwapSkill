@@ -9,6 +9,8 @@ export const users = pgTable("users", {
   fullName: text("full_name"),
   email: text("email"),
   location: text("location"),
+  skillsToTeach: text("skills_to_teach").array(), // Array of skill names to teach
+  skillsToLearn: text("skills_to_learn").array(), // Array of skill names to learn
 });
 
 export const skills = pgTable("skills", {

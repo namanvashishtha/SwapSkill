@@ -52,14 +52,44 @@ export default function SignupForm() {
     setIsLoading(true);
     setError(null);
     
-    // Simulate signup - in a real app, this would call the API
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({
-        title: "Coming soon",
-        description: "Registration system is under development",
+    try {
+      // Remove confirmPassword as it's not part of our API schema
+      const { confirmPassword, ...userData } = data;
+      
+      // Initialize empty skill arrays
+      const userDataWithSkills = {
+        ...userData,
+        skillsToTeach: [],
+        skillsToLearn: [],
+      };
+      
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userDataWithSkills),
       });
-    }, 1500);
+      
+      if (response.ok) {
+        const user = await response.json();
+        toast({
+          title: "Success",
+          description: `Account created successfully! Welcome, ${user.username}!`,
+        });
+        
+        // Redirect to home page after successful registration
+        window.location.href = '/';
+      } else {
+        const errorData = await response.text();
+        setError(errorData || 'Registration failed. Please try again.');
+      }
+    } catch (err) {
+      console.error('Registration error:', err);
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
