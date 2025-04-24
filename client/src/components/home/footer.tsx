@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import Logo from "@/components/ui/logo";
 
 export default function Footer() {
   return (
@@ -6,9 +7,8 @@ export default function Footer() {
       <div className="container mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <div className="text-2xl font-bold mb-4">
-              <span className="text-secondary">Swap</span>
-              <span className="text-white">Skill</span>
+            <div className="mb-4">
+              <Logo variant="light" />
             </div>
             <p className="text-gray-400 mb-4">Trade talents, not cash. Learn what you love from people who know.</p>
             <div className="flex space-x-4">
