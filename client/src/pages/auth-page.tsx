@@ -1,4 +1,3 @@
-import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/home/footer";
@@ -9,15 +8,7 @@ import { motion } from "framer-motion";
 import { useEffect } from "react";
 
 export default function AuthPage() {
-  const { user } = useAuth();
   const [, setLocation] = useLocation();
-
-  // Redirect to home if already logged in
-  useEffect(() => {
-    if (user) {
-      setLocation("/");
-    }
-  }, [user, setLocation]);
 
   return (
     <motion.div 

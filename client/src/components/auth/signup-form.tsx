@@ -3,7 +3,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
-import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 // Extend the insertUserSchema with validation rules
 const registerSchema = insertUserSchema.extend({
@@ -32,8 +32,9 @@ const registerSchema = insertUserSchema.extend({
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function SignupForm() {
-  const { registerMutation } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -48,14 +49,17 @@ export default function SignupForm() {
   });
 
   const onSubmit = async (data: RegisterFormValues) => {
+    setIsLoading(true);
     setError(null);
-    try {
-      // Remove confirmPassword before sending to API
-      const { confirmPassword, ...userData } = data;
-      await registerMutation.mutateAsync(userData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
-    }
+    
+    // Simulate signup - in a real app, this would call the API
+    setTimeout(() => {
+      setIsLoading(false);
+      toast({
+        title: "Coming soon",
+        description: "Registration system is under development",
+      });
+    }, 1500);
   };
 
   return (
@@ -154,9 +158,9 @@ export default function SignupForm() {
         <Button
           type="submit"
           className="w-full bg-secondary hover:bg-secondary-light"
-          disabled={registerMutation.isPending}
+          disabled={isLoading}
         >
-          {registerMutation.isPending ? (
+          {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Creating account...

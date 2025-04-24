@@ -48,7 +48,7 @@ export default function HeroSection() {
                 <Button 
                   size="lg" 
                   variant="outline" 
-                  className="border-2 border-white text-white hover:bg-white hover:text-primary pop-out-effect"
+                  className="border-2 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white pop-out-effect"
                 >
                   LEARN MORE
                 </Button>

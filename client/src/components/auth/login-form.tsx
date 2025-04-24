@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -14,6 +13,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 // Login schema
 const loginSchema = z.object({
@@ -28,8 +28,9 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginForm() {
-  const { loginMutation } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -40,12 +41,17 @@ export default function LoginForm() {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
+    setIsLoading(true);
     setError(null);
-    try {
-      await loginMutation.mutateAsync(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    }
+    
+    // Simulate login - in a real app, this would call the API
+    setTimeout(() => {
+      setIsLoading(false);
+      toast({
+        title: "Coming soon",
+        description: "Authentication system is under development",
+      });
+    }, 1500);
   };
 
   return (
@@ -88,9 +94,9 @@ export default function LoginForm() {
         <Button
           type="submit"
           className="w-full bg-primary hover:bg-[hsl(var(--primary-light))]"
-          disabled={loginMutation.isPending}
+          disabled={isLoading}
         >
-          {loginMutation.isPending ? (
+          {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Logging in...
