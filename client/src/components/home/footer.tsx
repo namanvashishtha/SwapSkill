@@ -37,15 +37,22 @@ export default function Footer() {
               <li><Link href="#" className="text-gray-400 hover:text-white transition">Safety Tips</Link></li>
               <li><Link href="#" className="text-gray-400 hover:text-white transition">Success Stories</Link></li>
               <li><Link href="#" className="text-gray-400 hover:text-white transition">Skill Categories</Link></li>
+              <li><Link href="#" className="text-gray-400 hover:text-white transition">Blog</Link></li>
+              <li><Link href="#" className="text-gray-400 hover:text-white transition">Support Center</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="text-lg font-bold mb-4">Company</h4>
             <ul className="space-y-2">
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">About Us</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Careers</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Press</Link></li>
+              <li><Link href="#about" className="text-gray-400 hover:text-white transition">About Us</Link></li>
+              <li><Link href="#team" className="text-gray-400 hover:text-white transition">Our Team</Link></li>
+              <li><Link href="#" className="text-gray-400 hover:text-white transition">
+                <span className="block">Founder: Naman Vashishtha</span>
+              </Link></li>
+              <li><Link href="#" className="text-gray-400 hover:text-white transition">
+                <span className="block">COO: Akshita Gupta</span>
+              </Link></li>
               <li><Link href="#" className="text-gray-400 hover:text-white transition">Contact</Link></li>
             </ul>
           </div>
@@ -57,6 +64,8 @@ export default function Footer() {
               <li><Link href="#" className="text-gray-400 hover:text-white transition">Privacy Policy</Link></li>
               <li><Link href="#" className="text-gray-400 hover:text-white transition">Cookie Policy</Link></li>
               <li><Link href="#" className="text-gray-400 hover:text-white transition">Community Standards</Link></li>
+              <li><Link href="#" className="text-gray-400 hover:text-white transition">Copyright Information</Link></li>
+              <li><Link href="#" className="text-gray-400 hover:text-white transition">DMCA Policy</Link></li>
             </ul>
           </div>
         </div>
