@@ -17,21 +17,21 @@ export default function TeamPage() {
       skills: ["Operations", "Community Building", "User Experience"]
     },
     {
-      name: "Rahul Sharma",
+      name: "Dinesh Rawat",
       role: "Lead Developer",
-      bio: "Rahul is responsible for SwapSkill's technical infrastructure. He has extensive experience in building scalable web applications and user-friendly interfaces.",
+      bio: "Dineshesponsible for SwapSkill's technical infrastructure. He has extensive experience in building scalable web applications and user-friendly interfaces.",
       skills: ["Full-stack Development", "Architecture Design", "Performance Optimization"]
     },
     {
-      name: "Priya Patel",
+      name: "Deepak",
       role: "Head of Community",
-      bio: "Priya manages our growing community of users. She's focused on creating a safe, inclusive environment where everyone feels empowered to share their skills.",
+      bio: "Deepak manages our growing community of users. She's focused on creating a safe, inclusive environment where everyone feels empowered to share their skills.",
       skills: ["Community Management", "Content Strategy", "User Engagement"]
     },
     {
-      name: "Vikram Singh",
+      name: "Ram",
       role: "Growth Marketing Lead",
-      bio: "Vikram drives SwapSkill's growth strategies. His data-driven approach helps us reach the right audiences and share our mission with the world.",
+      bio: "Ram drives SwapSkill's growth strategies. His data-driven approach helps us reach the right audiences and share our mission with the world.",
       skills: ["Digital Marketing", "Analytics", "Content Creation"]
     },
     {

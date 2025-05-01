@@ -3,14 +3,16 @@ import { motion } from "framer-motion";
 
 export default function SkillScrollbar() {
   // Double the skills array to create a seamless loop
-  const doubledSkills = [...skillIcons, ...skillIcons];
+  // const doubledSkills = [...skillIcons, ...skillIcons];
+
+  const fourSkills = [...skillIcons, ...skillIcons, ...skillIcons, ...skillIcons];
 
   return (
     <div className="bg-white py-4 overflow-hidden">
       <h3 className="text-center text-gray-500 mb-2 font-medium">POPULAR SKILLS</h3>
       <div className="skill-scrollbar-container overflow-hidden relative">
         <div className="skill-scrollbar">
-          {doubledSkills.map((skill, index) => (
+          {fourSkills.map((skill, index) => (
             <motion.div
               key={`${skill.id}-${index}`}
               whileHover={{ scale: 1.1 }}

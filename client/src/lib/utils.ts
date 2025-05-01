@@ -197,9 +197,200 @@ export const skillIcons = [
     bgColor: "bg-teal-100",
     textColor: "text-teal-600",
   },
+  // Additional 10 skills
+  {
+    id: 11,
+    name: "Taekwondo",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M9 5l7 7-7 7M5 5l7 7-7 7"
+      />
+    </svg>`,
+    bgColor: "bg-red-200",
+    textColor: "text-red-700",
+  },
+  {
+    id: 12,
+    name: "Surfing",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+      />
+    </svg>`,
+    bgColor: "bg-blue-200",
+    textColor: "text-blue-700",
+  },
+  {
+    id: 13,
+    name: "Video Gaming",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M9 12l2 2 4-4m5.5-3.5a2 2 0 11-4 0 2 2 0 014 0zM7 10.5a2 2 0 11-4 0 2 2 0 014 0zM19 10.5a2 2 0 11-4 0 2 2 0 014 0zM12 15.5a2 2 0 100-4 2 2 0 000 4z"
+      />
+    </svg>`,
+    bgColor: "bg-green-200",
+    textColor: "text-green-700",
+  },
+  {
+    id: 14,
+    name: "Skating",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M17 8l4 4m0 0l-4 4m4-4H3"
+      />
+    </svg>`,
+    bgColor: "bg-purple-200",
+    textColor: "text-purple-700",
+  },
+  {
+    id: 15,
+    name: "Basketball",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
+    </svg>`,
+    bgColor: "bg-orange-200",
+    textColor: "text-orange-700",
+  },
+  {
+    id: 16,
+    name: "Chess",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M9 5l7 7-7 7"
+      />
+    </svg>`,
+    bgColor: "bg-gray-200",
+    textColor: "text-gray-700",
+  },
+  {
+    id: 17,
+    name: "Swimming",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 16v-2.586l-2.293-2.293a1 1 0 00-1.414 0l-2.586 2.586V19h8zm-4-6l2 2 4-4 2 2V9l-6-6-6 6v5z"
+      />
+    </svg>`,
+    bgColor: "bg-teal-200",
+    textColor: "text-teal-700",
+  },
+  {
+    id: 18,
+    name: "Pottery",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M5 13l4 4L19 7"
+      />
+    </svg>`,
+    bgColor: "bg-pink-200",
+    textColor: "text-pink-700",
+  },
+  {
+    id: 19,
+    name: "Karate",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M15 10l4 4m0 0l-4 4m4-4H6"
+      />
+    </svg>`,
+    bgColor: "bg-indigo-200",
+    textColor: "text-indigo-700",
+  },
+  {
+    id: 20,
+    name: "Climbing",
+    icon: `<svg
+      class="h-8 w-8"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M7 11l5-5 5 5M7 11l5 5m-5-5h12"
+      />
+    </svg>`,
+    bgColor: "bg-green-200",
+    textColor: "text-green-700",
+  },
 ];
 
-// Features data
+// Features data (unchanged)
 export const features = [
   {
     title: "Create Your Profile",
@@ -257,7 +448,7 @@ export const features = [
   },
 ];
 
-// Testimonials data
+// Testimonials data (unchanged)
 export const testimonials = [
   {
     name: "Priya Sharma",
@@ -276,7 +467,7 @@ export const testimonials = [
   },
 ];
 
-// Footer links
+// Footer links (unchanged)
 export const footerLinks = {
   resources: [
     { title: "Community Guidelines", href: "#" },

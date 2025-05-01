@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -66,6 +66,15 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
     },
   });
 
+  useEffect(() => {
+    setMode(isSignup ? 'signup' : 'login');
+  }, [isSignup]);
+
+  useEffect(() => {
+    loginForm.reset();
+    signupForm.reset();
+  }, [mode]);
+
   const onLoginSubmit = (data: LoginFormData) => {
     loginMutation.mutate(data, {
       onSuccess: () => {
@@ -98,7 +107,14 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
   };
 
   const toggleMode = () => {
-    setMode(mode === 'login' ? 'signup' : 'login');
+    if (mode === 'login') {
+      setLocation('/auth?signup=true');
+      setMode('signup');
+    } else {
+      setLocation('/auth');
+      setMode('login');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -107,7 +123,7 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
         {mode === 'login' ? (
           <>
             <Form {...loginForm}>
-              <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-6">
+              <form key="login" onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-6">
                 <FormField
                   control={loginForm.control}
                   name="username"
@@ -155,7 +171,7 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
         ) : (
           <>
             <Form {...signupForm}>
-              <form onSubmit={signupForm.handleSubmit(onSignupSubmit)} className="space-y-6">
+              <form key="signup" onSubmit={signupForm.handleSubmit(onSignupSubmit)} className="space-y-6">
                 <FormField
                   control={signupForm.control}
                   name="username"
@@ -257,3 +273,7 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
     </div>
   );
 }
+// This code defines an authentication form component that allows users to log in or sign up.
+// It uses React Hook Form for form handling and Zod for validation. The form switches between login and signup modes based on the `isSignup` prop.
+// The login and signup schemas are defined using Zod, and the form submission is handled with mutations from a custom `useAuth` hook.
+// The component also uses a custom `useToast` hook for displaying success messages.

@@ -56,15 +56,17 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
+  // Serve the app on a random available port instead of fixed port
   // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
+  const port = 0; // 0 means random available port
   server.listen({
     port,
-    host: "0.0.0.0",
-    reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    const address = server.address();
+    if (address && typeof address === "object") {
+      log(`serving on port ${address.port}`);
+    } else {
+      log(`serving on unknown port`);
+    }
   });
 })();

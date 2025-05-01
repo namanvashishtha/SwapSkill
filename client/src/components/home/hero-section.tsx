@@ -23,11 +23,13 @@ export default function HeroSection() {
             className="md:w-7/12 space-y-8"
           >
             <h1 className="font-poppins font-bold text-4xl md:text-6xl leading-tight">
-              <span className="block typewriter">Welcome to</span>
-              <span className="rainbow-text font-extrabold">SwapSkill</span>
+              <span className="typewriter font-extrabold inline-block rainbow-multi-hover">Welcome to SwapSkill</span>
+
+
+
             </h1>
 
-            <p className="text-xl md:text-2xl font-medium max-w-xl">
+            <p className="text-xl md:text-2xl font-medium max-w-xl text-yellow-400">
               Got a skill? Need a skill? Let's make the magic happen with SwapSkill
             </p>
 
@@ -69,24 +71,11 @@ export default function HeroSection() {
                 transition={{ type: "spring", stiffness: 300 }}
                 className="rounded-xl shadow-xl overflow-hidden"
               >
-                <svg
-                  className="w-full aspect-[4/3] bg-primary-light/30"
-                  viewBox="0 0 400 300"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect width="400" height="300" fill="#8a2be2" opacity="0.1" />
-                  <text
-                    x="50%"
-                    y="50%"
-                    dominantBaseline="middle"
-                    textAnchor="middle"
-                    fill="#8a2be2"
-                    fontSize="20"
-                    fontFamily="sans-serif"
-                  >
-                    People collaborating on skills
-                  </text>
-                </svg>
+                <img
+                  src="/image.jpg"
+                  alt="People collaborating on skills"
+                  className="w-full aspect-[4/3] object-cover bg-primary-light/30"
+                />
               </motion.div>
 
               {/* Decorative elements */}

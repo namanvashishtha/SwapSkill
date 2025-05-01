@@ -44,7 +44,7 @@ export default function AboutPage() {
                   often expensive, while informal skill exchanges lacked structure and safety.
                 </p>
                 <p className="text-gray-600 mb-6 leading-relaxed">
-                  Founded in 2023, our platform connects people who want to learn with those who want 
+                  Founded in 2025, our platform connects people who want to learn with those who want 
                   to teach - creating a vibrant community where knowledge is the currency and everyone 
                   has something valuable to offer.
                 </p>
