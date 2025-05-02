@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import Navbar from "@/components/layout/navbar";
+
 import Footer from "@/components/home/footer";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -7,7 +7,7 @@ import { Link } from "wouter";
 export default function AboutPage() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
+      
       
       <main className="flex-grow">
         {/* Hero Section */}

@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] }); // Added to force refetch
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.username}!`,
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] }); // Optional: added for consistency
       toast({
         title: "Registration successful",
         description: `Welcome to SwapSkill, ${user.username}!`,
@@ -79,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] }); // Optional: added for consistency
     },
     onError: (error: Error) => {
       toast({

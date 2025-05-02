@@ -1,4 +1,4 @@
-import Navbar from "@/components/layout/navbar";
+
 import Footer from "@/components/home/footer";
 import AuthForm from "@/components/AuthForm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,7 +29,7 @@ export default function AuthPage() {
       transition={{ duration: 0.5 }}
       className="min-h-screen bg-gray-50 flex flex-col"
     >
-      <Navbar />
+     
       
       <div className="flex-grow py-16">
         <div className="container mx-auto px-6">

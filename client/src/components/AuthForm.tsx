@@ -75,36 +75,38 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
     signupForm.reset();
   }, [mode]);
 
-  const onLoginSubmit = (data: LoginFormData) => {
-    loginMutation.mutate(data, {
-      onSuccess: () => {
-        toast({
-          title: "Login successful",
-          description: "Welcome back to SwapSkill!",
-        });
-        setLocation("/");
-      }
-    });
-  };
+    const onLoginSubmit = (data: LoginFormData) => {
+      loginMutation.mutate(data, {
+        onSuccess: () => {
+          toast({
+            title: "Login successful",
+            description: "Welcome back to SwapSkill!",
+          });
+          setLocation("/user-dashboard");
+        }
+      });
+    };
 
-  const onSignupSubmit = (data: SignupFormData) => {
-    const { confirmPassword, fullName, email, location, ...userData } = data;
-    
-    registerMutation.mutate({ 
-      ...userData,
-      fullName,
-      email,
-      location
-    }, {
-      onSuccess: () => {
-        toast({
-          title: "Registration successful",
-          description: "Welcome to SwapSkill!",
-        });
-        setLocation("/");
-      }
-    });
-  };
+    const onSignupSubmit = (data: SignupFormData) => {
+      const { confirmPassword, fullName, email, location, ...userData } = data;
+      
+      registerMutation.mutate({ 
+        ...userData,
+        fullName,
+        email,
+        location
+      }, {
+        onSuccess: () => {
+          toast({
+            title: "Registration successful",
+            description: "Registration successful, you can login now.",
+          });
+          // After registration, switch to login mode without redirect
+          setMode('login');
+          signupForm.reset();
+        }
+      });
+    };
 
   const toggleMode = () => {
     if (mode === 'login') {

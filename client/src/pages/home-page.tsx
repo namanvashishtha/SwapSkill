@@ -14,7 +14,7 @@ export default function HomePage() {
       transition={{ duration: 0.5 }}
       className="min-h-screen bg-gray-50"
     >
-      <Navbar />
+      
       <HeroSection />
       <SkillScrollbar />
       <FeaturesSection />
