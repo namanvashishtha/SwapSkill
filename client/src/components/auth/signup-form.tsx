@@ -78,8 +78,8 @@ export default function SignupForm() {
           description: `Account created successfully! Welcome, ${user.username}!`,
         });
         
-        // Redirect to home page after successful registration
-        window.location.href = '/';
+        // Redirect to profile edit page after successful registration
+        window.location.href = '/profile-edit';
       } else {
         const errorData = await response.text();
         setError(errorData || 'Registration failed. Please try again.');
