@@ -1,6 +1,9 @@
+// tailwind.config.ts
 import type { Config } from "tailwindcss";
+import animatePlugin from "tailwindcss-animate";
+import typographyPlugin from "@tailwindcss/typography";
 
-export default {
+const config: Config = {
   darkMode: ["class"],
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
@@ -41,7 +44,7 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
-        border: "hsl(var(--border))",
+        border: "#e5e7eb", // ✅ Custom color used for 'border-border'
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         chart: {
@@ -64,20 +67,12 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
         scroll: {
           "0%": { transform: "translateX(0)" },
@@ -88,8 +83,11 @@ export default {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         scroll: "scroll 20s linear infinite",
+        "pulse-slow": "pulse 2s ease-in-out infinite", // ✅ Added slow pulse
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
-} satisfies Config;
+  plugins: [animatePlugin, typographyPlugin],
+};
+
+export default config;

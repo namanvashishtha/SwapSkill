@@ -143,7 +143,7 @@ export default function UserDashboard() {
             className="bg-indigo-50 rounded-xl p-6 shadow-lg"
           >
             <h3 className="text-lg font-semibold mb-4">About Me</h3>
-            <Link to="/profile">
+            <Link to="/profile-edit">
               <Button className="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-3">
                 View Profile
               </Button>

@@ -9,12 +9,13 @@ import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type AuthContextType = {
-  user: SelectUser | null;
+  user: (SelectUser & { bio?: string; imageUrl?: string }) | null;
   isLoading: boolean;
   error: Error | null;
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
+  updateUserProfile: (data: { bio: string; image: File | null }) => Promise<void>;
 };
 
 type LoginData = Pick<InsertUser, "username" | "password">;
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Login successful, user:", user);
       queryClient.setQueryData(["/api/user"], user);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] }); // Added to force refetch
       toast({
@@ -80,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
+      console.log("Logout successful, clearing user state");
       queryClient.setQueryData(["/api/user"], null);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] }); // Optional: added for consistency
     },
@@ -92,6 +95,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const updateUserProfile = async (data: { bio: string; image: File | null }) => {
+    const formData = new FormData();
+    formData.append("bio", data.bio);
+    if (data.image) {
+      formData.append("image", data.image);
+    }
+    const res = await fetch("/api/user/profile", {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      throw new Error("Failed to update profile");
+    }
+    const updatedUser = await res.json();
+    queryClient.setQueryData(["/api/user"], updatedUser);
+    queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -101,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginMutation,
         logoutMutation,
         registerMutation,
+        updateUserProfile,
       }}
     >
       {children}

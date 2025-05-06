@@ -38,9 +38,10 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 interface AuthFormProps {
   isSignup?: boolean;
+  scrollToTop?: () => void;
 }
 
-export default function AuthForm({ isSignup = false }: AuthFormProps) {
+export default function AuthForm({ isSignup = false, scrollToTop }: AuthFormProps) {
   const [mode, setMode] = useState<'login' | 'signup'>(isSignup ? 'signup' : 'login');
   const { loginMutation, registerMutation } = useAuth();
   const { toast } = useToast();
@@ -71,6 +72,10 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
   }, [isSignup]);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [mode]);
+
+  useEffect(() => {
     loginForm.reset();
     signupForm.reset();
   }, [mode]);
@@ -99,10 +104,10 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
         onSuccess: () => {
           toast({
             title: "Registration successful",
-            description: "Registration successful, you can login now.",
+            description: "Registration successful, please complete your profile.",
           });
-          // After registration, switch to login mode without redirect
-          setMode('login');
+          localStorage.setItem("hasCompletedProfile", "false");
+          setLocation("/profile-edit");
           signupForm.reset();
         }
       });
@@ -110,13 +115,16 @@ export default function AuthForm({ isSignup = false }: AuthFormProps) {
 
   const toggleMode = () => {
     if (mode === 'login') {
+      window.scrollTo(0, 0);
+      scrollToTop?.();
       setLocation('/auth?signup=true');
       setMode('signup');
     } else {
+      window.scrollTo(0, 0);
       setLocation('/auth');
       setMode('login');
+      scrollToTop?.();
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (

@@ -1,4 +1,3 @@
-
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
@@ -12,9 +11,13 @@ import CommunityGuidelinesPage from "@/pages/community-guidelines-page";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import UserDashboard from "@/pages/user-dashboard";
+import ProfileEdit from "@/pages/profile-edit";
 import ScrollToTop from "@/components/ScrollToTop";
 import { Loader2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+
+
+
 // Component to handle the home route and redirect authenticated users
 function HomeRoute() {
   const { user, isLoading } = useAuth();
@@ -50,6 +53,7 @@ function Router() {
       <Route path="/community-guidelines">
         <CommunityGuidelinesPage />
       </Route>
+      <ProtectedRoute path="/profile-edit" component={ProfileEdit} />
       <ProtectedRoute path="/user-dashboard" component={UserDashboard} />
       <Route>
         <NotFound />

@@ -7,9 +7,12 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 
+import { useRef } from "react";
+
 export default function AuthPage() {
   const [location, setLocation] = useLocation();
   const { user } = useAuth();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Parse query parameters from location
   const searchParams = new URLSearchParams(location.split('?')[1]);
@@ -22,6 +25,12 @@ export default function AuthPage() {
     }
   }, [user, setLocation]);
 
+  const scrollToTop = () => {
+    if (containerRef.current) {
+      containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -29,9 +38,7 @@ export default function AuthPage() {
       transition={{ duration: 0.5 }}
       className="min-h-screen bg-gray-50 flex flex-col"
     >
-     
-      
-      <div className="flex-grow py-16">
+      <div className="flex-grow py-16" ref={containerRef}>
         <div className="container mx-auto px-6">
           <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
             <div className="grid md:grid-cols-2">
@@ -40,10 +47,8 @@ export default function AuthPage() {
                 <h2 className="text-3xl font-poppins font-bold mb-6 multi-color-hover">
                   Join SwapSkill
                 </h2>
-                
-                <AuthForm isSignup={isSignup} />
+                <AuthForm isSignup={isSignup} scrollToTop={scrollToTop} />
               </div>
-              
               {/* Right side: Hero content */}
               <div className="gradient-bg text-white p-8 flex flex-col justify-center relative hidden md:block">
                 <div className="z-10 relative">
@@ -70,7 +75,6 @@ export default function AuthPage() {
                     ))}
                   </ul>
                 </div>
-                
                 {/* Decorative element */}
                 <div className="absolute top-0 right-0 w-64 h-64 opacity-10">
                   <svg width="100%" height="100%" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
@@ -82,7 +86,6 @@ export default function AuthPage() {
           </div>
         </div>
       </div>
-      
       <Footer />
     </motion.div>
   );
