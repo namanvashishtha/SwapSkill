@@ -1,6 +1,10 @@
+// Load environment variables from .env file
+import 'dotenv/config';
+
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { registerRoutes } from "./routes.js";
+import { setupVite, serveStatic, log } from "./vite.js";
+import { storage } from "./storage.js";
 
 const app = express();
 app.use(express.json());
@@ -37,6 +41,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Initialize storage (MongoDB with memory fallback)
+  try {
+    await storage.initialize();
+    log('Storage initialized successfully');
+  } catch (error) {
+    log(`Failed to initialize storage: ${error instanceof Error ? error.message : String(error)}`);
+    log('Application will continue with memory storage only');
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -56,9 +69,9 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // Serve the app on a random available port instead of fixed port
+  // Use PORT from environment variable if available, otherwise use a random port
   // this serves both the API and the client.
-  const port = 0; // 0 means random available port
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 0; // 0 means random available port
   server.listen({
     port,
   }, () => {

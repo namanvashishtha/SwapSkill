@@ -46,7 +46,7 @@ export default function HeroSection() {
                   GET STARTED
                 </Button>
               </Link>
-              <Link href="#features" className="inline-block">
+              <Link href="/about" className="inline-block">
                 <Button 
                   size="lg" 
                   variant="outline" 

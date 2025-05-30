@@ -96,7 +96,14 @@ export default function SignupPage() {
                       <FormItem>
                         <FormLabel>Full Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter your full name" {...field} />
+                          <Input 
+                            placeholder="Enter your full name" 
+                            value={field.value || ''} 
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -110,7 +117,15 @@ export default function SignupPage() {
                       <FormItem>
                         <FormLabel>Email Address</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="Enter your email address" {...field} />
+                          <Input 
+                            type="email" 
+                            placeholder="Enter your email address" 
+                            value={field.value || ''} 
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -124,7 +139,14 @@ export default function SignupPage() {
                       <FormItem>
                         <FormLabel>Location</FormLabel>
                         <FormControl>
-                          <Input placeholder="City, State" {...field} />
+                          <Input 
+                            placeholder="City, State" 
+                            value={field.value || ''} 
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

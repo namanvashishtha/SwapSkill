@@ -15,16 +15,16 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="flex items-center justify-between p-4 bg-white shadow-md">
+    <nav className="flex items-center justify-between p-4 bg-white shadow-md relative z-50">
       <div className="flex items-center space-x-4">
-        <Link href="/" className="text-xl font-bold">
+        <Link href="/" className="text-xl font-bold relative z-10">
           <span className="text-pink-500">Swap</span>
           <span className="text-black">Skill</span>
         </Link>
-        <Link href="/" className="text-primary-dark font-medium hover:text-primary transition py-2 px-4">
+        <Link href="/" className="text-primary-dark font-medium hover:text-primary transition py-2 px-4 relative z-10">
           Home
         </Link>
-        <Link href="/about" className="text-primary-dark font-medium hover:text-primary transition py-2 px-4">
+        <Link href="/about" className="text-primary-dark font-medium hover:text-primary transition py-2 px-4 relative z-10">
           About
         </Link>
       </div>
@@ -34,24 +34,25 @@ export default function Navbar() {
           <>
             <Link
               href="/auth"
-              className="text-black font-medium hover:text-purple-700 transition py-2 px-4"
+              className="text-black font-medium hover:text-purple-700 transition py-2 px-4 relative z-10"
             >
               LOGIN
             </Link>
             <Link
               href="/auth?signup=true"
-              className="bg-pink-500 hover:bg-pink-600 text-white font-medium py-2 px-4 rounded-full transition"
+              className="bg-pink-500 hover:bg-pink-600 text-white font-medium py-2 px-4 rounded-full transition relative z-10"
             >
               SIGN UP
             </Link>
           </>
         ) : (
           <>
-            <span className="text-gray-700 font-semibold text-lg mr-4">
+            <span className="text-gray-700 font-semibold text-lg mr-4 relative z-10">
               Hello, {user.username}
             </span>
             <Button
                 onClick={handleLogout}
+                type="button"
                 className="bg-red-500 text-white py-2 px-4 rounded relative overflow-hidden 
                           transition-all duration-300 ease-in-out
                           hover:bg-white hover:text-red-500
@@ -65,11 +66,10 @@ export default function Navbar() {
                           before:duration-300 
                           before:ease-in-out 
                           hover:before:scale-x-100
-                          z-10"
+                          z-20"
               >
-                <span className="relative z-20">Logout</span>
+                <span className="relative z-30">Logout</span>
               </Button>
-
           </>
         )}
       </div>

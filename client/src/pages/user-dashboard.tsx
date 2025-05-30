@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,7 +7,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Home, Calendar, Book, Settings, User } from "lucide-react";
+import { Home, Calendar, Book, Settings, User, X, Trash2 } from "lucide-react";
+import { queryClient } from "../lib/queryClient";
 
 const data = [
   { name: "Mon", sessions: 2 },
@@ -23,17 +24,78 @@ export default function UserDashboard() {
   const { user, isLoading } = useAuth();
   const { toast } = useToast();
 
-  const [skillsToTeach, setSkillsToTeach] = useState(user?.skillsToTeach ?? []);
-  const [skillsToLearn, setSkillsToLearn] = useState(user?.skillsToLearn ?? []);
+  const [skillsToTeach, setSkillsToTeach] = useState<string[]>([]);
+  const [skillsToLearn, setSkillsToLearn] = useState<string[]>([]);
   const [newTeachSkill, setNewTeachSkill] = useState("");
   const [newLearnSkill, setNewLearnSkill] = useState("");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isAddingTeachSkill, setIsAddingTeachSkill] = useState(false);
+  const [isAddingLearnSkill, setIsAddingLearnSkill] = useState(false);
+  const [removingSkill, setRemovingSkill] = useState<string | null>(null);
+  
+  // Update skills whenever user data changes
+  useEffect(() => {
+    if (user) {
+      setSkillsToTeach(user.skillsToTeach ?? []);
+      setSkillsToLearn(user.skillsToLearn ?? []);
+      
+      // Log user data for debugging
+      console.log("User data in dashboard:", user);
+      console.log("Bio:", user.bio);
+      console.log("Image URL:", user.imageUrl);
+    }
+  }, [user]);
 
   if (isLoading) {
     return <div className="p-6 text-lg">Loading dashboard...</div>;
   }
 
-  const handleAddTeachSkill = () => {
+  const updateSkillsOnServer = async (skillsToTeach: string[], skillsToLearn: string[]) => {
+    try {
+      // First, get the current user data to include required fields
+      if (!user) {
+        throw new Error('User data is not available');
+      }
+      
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          // Include required fields from current user data
+          fullName: user.fullName || '',
+          email: user.email || '',
+          location: user.location || '',
+          // Include the updated skills
+          skillsToTeach,
+          skillsToLearn,
+          // Preserve other fields
+          bio: user.bio || '',
+        }),
+        credentials: 'include', // Ensure cookies are sent
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update skills');
+      }
+      
+      const updatedUserData = await response.json();
+      
+      // Immediately update the cache with the new user data for real-time UI updates
+      queryClient.setQueryData(["/api/user"], updatedUserData);
+      
+      // Also trigger a background refresh to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      
+      return updatedUserData;
+    } catch (error) {
+      console.error('Error updating skills:', error);
+      throw error;
+    }
+  };
+
+  const handleAddTeachSkill = async () => {
     if (!newTeachSkill.trim()) {
       toast({
         title: "Error",
@@ -42,7 +104,13 @@ export default function UserDashboard() {
       });
       return;
     }
-    if (skillsToTeach.includes(newTeachSkill.trim())) {
+    // Case-insensitive check for existing skills
+    const trimmedSkill = newTeachSkill.trim();
+    const skillExistsAlready = skillsToTeach.some(
+      skill => skill.toLowerCase() === trimmedSkill.toLowerCase()
+    );
+    
+    if (skillExistsAlready) {
       toast({
         title: "Error",
         description: "This skill already exists in your 'Skills I Can Teach' list.",
@@ -50,15 +118,42 @@ export default function UserDashboard() {
       });
       return;
     }
-    setSkillsToTeach([...skillsToTeach, newTeachSkill.trim()]);
-    setNewTeachSkill("");
-    toast({
-      title: "Success",
-      description: "Skill added to 'Skills I Can Teach'.",
-    });
+    
+    const updatedSkills = [...skillsToTeach, newTeachSkill.trim()];
+    
+    // Immediately update local state for instant UI feedback
+    setSkillsToTeach(updatedSkills);
+    setIsAddingTeachSkill(true);
+    
+    try {
+      const result = await updateSkillsOnServer(updatedSkills, skillsToLearn);
+      console.log("Skill update result:", result);
+      
+      // Update with the server response data when it comes back
+      if (result && result.skillsToTeach) {
+        setSkillsToTeach(result.skillsToTeach);
+      }
+      
+      setNewTeachSkill("");
+      toast({
+        title: "Success",
+        description: "Skill added to 'Skills I Can Teach'.",
+      });
+    } catch (error) {
+      console.error("Error adding teach skill:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error 
+          ? `Failed to update skills: ${error.message}` 
+          : "Failed to update skills. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingTeachSkill(false);
+    }
   };
 
-  const handleAddLearnSkill = () => {
+  const handleAddLearnSkill = async () => {
     if (!newLearnSkill.trim()) {
       toast({
         title: "Error",
@@ -67,7 +162,13 @@ export default function UserDashboard() {
       });
       return;
     }
-    if (skillsToLearn.includes(newLearnSkill.trim())) {
+    // Case-insensitive check for existing skills
+    const trimmedSkill = newLearnSkill.trim();
+    const skillExistsAlready = skillsToLearn.some(
+      skill => skill.toLowerCase() === trimmedSkill.toLowerCase()
+    );
+    
+    if (skillExistsAlready) {
       toast({
         title: "Error",
         description: "This skill already exists in your 'Skills I Wish to Learn' list.",
@@ -75,40 +176,115 @@ export default function UserDashboard() {
       });
       return;
     }
-    setSkillsToLearn([...skillsToLearn, newLearnSkill.trim()]);
-    setNewLearnSkill("");
-    toast({
-      title: "Success",
-      description: "Skill added to 'Skills I Wish to Learn'.",
-    });
+    
+    const updatedSkills = [...skillsToLearn, newLearnSkill.trim()];
+    
+    // Immediately update local state for instant UI feedback
+    setSkillsToLearn(updatedSkills);
+    setIsAddingLearnSkill(true);
+    
+    try {
+      const result = await updateSkillsOnServer(skillsToTeach, updatedSkills);
+      console.log("Skill update result:", result);
+      
+      // Update with the server response data when it comes back
+      if (result && result.skillsToLearn) {
+        setSkillsToLearn(result.skillsToLearn);
+      }
+      
+      setNewLearnSkill("");
+      toast({
+        title: "Success",
+        description: "Skill added to 'Skills I Wish to Learn'.",
+      });
+    } catch (error) {
+      console.error("Error adding learn skill:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error 
+          ? `Failed to update skills: ${error.message}` 
+          : "Failed to update skills. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingLearnSkill(false);
+    }
+  };
+  
+  const handleRemoveTeachSkill = async (skillToRemove: string) => {
+    if (removingSkill) return; // Prevent multiple simultaneous removals
+    
+    // Immediately update UI for instant feedback
+    const updatedSkills = skillsToTeach.filter(skill => skill !== skillToRemove);
+    setSkillsToTeach(updatedSkills);
+    
+    setRemovingSkill(skillToRemove);
+    try {
+      const result = await updateSkillsOnServer(updatedSkills, skillsToLearn);
+      console.log("Skill removal result:", result);
+      
+      // Update with server response if needed
+      if (result && result.skillsToTeach) {
+        setSkillsToTeach(result.skillsToTeach);
+      }
+      
+      toast({
+        title: "Success",
+        description: `"${skillToRemove}" removed from 'Skills I Can Teach'.`,
+      });
+    } catch (error) {
+      console.error("Error removing teach skill:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error 
+          ? `Failed to remove skill: ${error.message}` 
+          : "Failed to remove skill. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRemovingSkill(null);
+    }
+  };
+  
+  const handleRemoveLearnSkill = async (skillToRemove: string) => {
+    if (removingSkill) return; // Prevent multiple simultaneous removals
+    
+    // Immediately update UI for instant feedback
+    const updatedSkills = skillsToLearn.filter(skill => skill !== skillToRemove);
+    setSkillsToLearn(updatedSkills);
+    
+    setRemovingSkill(skillToRemove);
+    try {
+      const result = await updateSkillsOnServer(skillsToTeach, updatedSkills);
+      console.log("Skill removal result:", result);
+      
+      // Update with server response if needed
+      if (result && result.skillsToLearn) {
+        setSkillsToLearn(result.skillsToLearn);
+      }
+      
+      toast({
+        title: "Success",
+        description: `"${skillToRemove}" removed from 'Skills I Wish to Learn'.`,
+      });
+    } catch (error) {
+      console.error("Error removing learn skill:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error 
+          ? `Failed to remove skill: ${error.message}` 
+          : "Failed to remove skill. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRemovingSkill(null);
+    }
   };
 
   return (
     <div className="bg-white text-gray-900 min-h-screen flex flex-col">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 bg-white shadow-md z-50 flex justify-between items-center px-6 py-4">
-        <div className="flex items-center space-x-6">
-          <Link href="#" className="font-bold text-xl flex items-center">
-            <span className="text-pink-500 mr-1">Swap</span>
-            <span className="text-black">Skill</span>
-          </Link>
-          <Link href="#" className="text-gray-600 hover:text-indigo-700">
-            Home
-          </Link>
-          <Link href="#" className="text-gray-600 hover:text-indigo-700">
-            About
-          </Link>
-        </div>
-        <div className="flex items-center space-x-4">
-          <span className="text-gray-600">Hello, {user?.username || "User"}</span>
-          <Button className="bg-red-500 text-white hover:bg-white hover:text-red-500 border border-red-500 rounded-lg px-4 py-2 transition-colors duration-300">
-            Logout
-          </Button>
-        </div>
-      </nav>
-
       {/* Main Layout */}
-      <div className="flex flex-1 pt-16">
+      <div className="flex flex-1">
         {/* Sidebar */}
         <motion.aside
           initial={{ width: 64 }}
@@ -116,7 +292,7 @@ export default function UserDashboard() {
           onHoverStart={() => setIsSidebarExpanded(true)}
           onHoverEnd={() => setIsSidebarExpanded(false)}
           transition={{ duration: 0.3 }}
-          className="fixed top-16 left-0 h-[calc(100vh-4rem)] bg-indigo-700 text-white z-40 shadow-lg overflow-hidden"
+          className="fixed top-[4.5rem] left-0 h-[calc(100vh-4.5rem)] bg-indigo-700 text-white z-40 shadow-lg overflow-hidden"
         >
           <div className="flex flex-col h-full py-6 space-y-4 px-2">
             <Link href="/profile-edit" className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 rounded-lg">
@@ -179,35 +355,50 @@ export default function UserDashboard() {
 
         {/* Main Content Area */}
         <motion.div
-          className="flex-1 p-8 transition-all duration-300"
+          className="flex-1 p-8 pt-16 transition-all duration-300"
           animate={{ marginLeft: isSidebarExpanded ? "200px" : "64px" }}
         >
           {/* Header */}
-          <header className="mb-8 flex justify-between items-center">
-            <div>
-              <h1 className="text-4xl font-semibold">{user?.username || "User"}’s Dashboard</h1>
-              <p className="text-gray-500">Here’s your activity this week:</p>
-            </div>
-            <div className="relative">
-              {user?.imageUrl ? (
-                <img
-                  src={user.imageUrl}
-                  alt="Profile"
-                  className="w-12 h-12 rounded-full border-2 border-indigo-600 object-cover hover:scale-105 transition-transform duration-200"
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-full border-2 border-indigo-600 bg-gray-200 flex items-center justify-center text-gray-600 font-semibold text-xl hover:scale-105 transition-transform duration-200">
-                  {user?.username?.charAt(0).toUpperCase() || "U"}
+          <header className="mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h1 className="text-4xl font-semibold">{user?.username || "User"}'s Dashboard</h1>
+                <p className="text-gray-500">Here's your activity this week:</p>
+              </div>
+              <Link href="/profile-edit">
+                <div className="relative group">
+                  {user?.imageUrl ? (
+                    <img
+                      src={user.imageUrl}
+                      alt="Profile"
+                      className="w-16 h-16 rounded-full border-2 border-indigo-600 object-cover hover:scale-105 transition-transform duration-200"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full border-2 border-indigo-600 bg-gray-200 flex items-center justify-center text-gray-600 font-semibold text-xl hover:scale-105 transition-transform duration-200">
+                      {user?.username?.charAt(0).toUpperCase() || "U"}
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-full flex items-center justify-center transition-all duration-200">
+                    <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">Edit</span>
+                  </div>
                 </div>
-              )}
+              </Link>
             </div>
+            
+            {/* User Bio */}
+            {user?.bio && (
+              <div className="bg-indigo-50 p-4 rounded-lg shadow-sm mb-4">
+                <h3 className="text-sm font-semibold text-indigo-800 mb-1">About Me</h3>
+                <p className="text-gray-700">{user.bio}</p>
+              </div>
+            )}
           </header>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card className="hover:shadow-xl transition-shadow bg-white text-gray-800 shadow-md rounded-xl p-6">
               <CardContent>
-                <h3 className="text-xl font-semibold">Skills Shared</h3>
+                <h3 className="text-xl font-semibold">Skills to Share</h3>
                 <p className="text-3xl font-bold text-indigo-600">{skillsToTeach.length}</p>
               </CardContent>
             </Card>
@@ -244,9 +435,30 @@ export default function UserDashboard() {
             <div className="bg-indigo-50 rounded-xl p-6 shadow-lg">
               <h3 className="text-lg font-semibold mb-4">Skills I Can Teach</h3>
               {skillsToTeach.length > 0 ? (
-                <ul className="list-disc list-inside text-sm space-y-2">
+                <ul className="space-y-2">
                   {skillsToTeach.map((skill, index) => (
-                    <li key={index}>{skill}</li>
+                    <li key={index} className="flex items-center justify-between bg-white rounded-lg p-2 shadow-sm">
+                      <span className="text-sm">{skill}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleRemoveTeachSkill(skill)}
+                        disabled={removingSkill !== null}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 h-8"
+                      >
+                        {removingSkill === skill ? (
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            <span>Remove</span>
+                          </>
+                        )}
+                      </Button>
+                    </li>
                   ))}
                 </ul>
               ) : (
@@ -261,9 +473,18 @@ export default function UserDashboard() {
                 />
                 <Button
                   onClick={handleAddTeachSkill}
+                  disabled={isAddingTeachSkill}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
-                  Add
+                  {isAddingTeachSkill ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Adding...
+                    </>
+                  ) : "Add"}
                 </Button>
               </div>
             </div>
@@ -272,9 +493,30 @@ export default function UserDashboard() {
             <div className="bg-indigo-50 rounded-xl p-6 shadow-lg">
               <h3 className="text-lg font-semibold mb-4">Skills I Wish to Learn</h3>
               {skillsToLearn.length > 0 ? (
-                <ul className="list-disc list-inside text-sm space-y-2">
+                <ul className="space-y-2">
                   {skillsToLearn.map((skill, index) => (
-                    <li key={index}>{skill}</li>
+                    <li key={index} className="flex items-center justify-between bg-white rounded-lg p-2 shadow-sm">
+                      <span className="text-sm">{skill}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleRemoveLearnSkill(skill)}
+                        disabled={removingSkill !== null}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 h-8"
+                      >
+                        {removingSkill === skill ? (
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            <span>Remove</span>
+                          </>
+                        )}
+                      </Button>
+                    </li>
                   ))}
                 </ul>
               ) : (
@@ -289,9 +531,18 @@ export default function UserDashboard() {
                 />
                 <Button
                   onClick={handleAddLearnSkill}
+                  disabled={isAddingLearnSkill}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
-                  Add
+                  {isAddingLearnSkill ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Adding...
+                    </>
+                  ) : "Add"}
                 </Button>
               </div>
             </div>

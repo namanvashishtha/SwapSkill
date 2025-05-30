@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import MongoDBStatus from "./MongoDBStatus";
 
 export default function Footer() {
   return (

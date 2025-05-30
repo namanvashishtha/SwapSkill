@@ -67,9 +67,16 @@ export default function AuthForm({ isSignup = false, scrollToTop }: AuthFormProp
     },
   });
 
+  // Set the initial mode based on the isSignup prop
   useEffect(() => {
+    console.log("AuthForm: isSignup prop changed to", isSignup);
     setMode(isSignup ? 'signup' : 'login');
   }, [isSignup]);
+  
+  // Log the current mode for debugging
+  useEffect(() => {
+    console.log("AuthForm: Current mode is", mode);
+  }, [mode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -80,48 +87,69 @@ export default function AuthForm({ isSignup = false, scrollToTop }: AuthFormProp
     signupForm.reset();
   }, [mode]);
 
-    const onLoginSubmit = (data: LoginFormData) => {
-      loginMutation.mutate(data, {
-        onSuccess: () => {
-          toast({
-            title: "Login successful",
-            description: "Welcome back to SwapSkill!",
-          });
-          setLocation("/user-dashboard");
-        }
-      });
+    const onLoginSubmit = async (data: LoginFormData) => {
+      try {
+        // Use the mutation directly and wait for it to complete
+        await loginMutation.mutateAsync(data);
+        
+        // Show success toast
+        toast({
+          title: "Login successful",
+          description: "Welcome back to SwapSkill!",
+        });
+        
+        // Force a reload of the page to ensure all state is properly updated
+        window.location.href = "/user-dashboard";
+      } catch (error) {
+        console.error("Login error:", error);
+        // Error handling is already done in the mutation
+      }
     };
 
-    const onSignupSubmit = (data: SignupFormData) => {
-      const { confirmPassword, fullName, email, location, ...userData } = data;
-      
-      registerMutation.mutate({ 
-        ...userData,
-        fullName,
-        email,
-        location
-      }, {
-        onSuccess: () => {
-          toast({
-            title: "Registration successful",
-            description: "Registration successful, please complete your profile.",
-          });
-          localStorage.setItem("hasCompletedProfile", "false");
-          setLocation("/profile-edit");
-          signupForm.reset();
-        }
-      });
+    const onSignupSubmit = async (data: SignupFormData) => {
+      try {
+        const { confirmPassword, fullName, email, location, ...userData } = data;
+        
+        // Use the mutation directly and wait for it to complete
+        await registerMutation.mutateAsync({ 
+          ...userData,
+          fullName,
+          email,
+          location,
+          skillsToTeach: null,
+          skillsToLearn: null
+        });
+        
+        // Show success toast
+        toast({
+          title: "Registration successful",
+          description: "Registration successful, please complete your profile.",
+        });
+        
+        localStorage.setItem("hasCompletedProfile", "false");
+        
+        // Force a reload of the page to ensure all state is properly updated
+        window.location.href = "/profile-edit";
+        signupForm.reset();
+      } catch (error) {
+        console.error("Registration error:", error);
+        // Error handling is already done in the mutation
+      }
     };
 
   const toggleMode = () => {
     if (mode === 'login') {
+      console.log("Toggling from login to signup");
       window.scrollTo(0, 0);
       scrollToTop?.();
-      setLocation('/auth?signup=true');
+      // Force a full page navigation to ensure query parameters are properly handled
+      window.location.href = '/auth?signup=true';
       setMode('signup');
     } else {
+      console.log("Toggling from signup to login");
       window.scrollTo(0, 0);
-      setLocation('/auth');
+      // Force a full page navigation to ensure query parameters are properly handled
+      window.location.href = '/auth';
       setMode('login');
       scrollToTop?.();
     }

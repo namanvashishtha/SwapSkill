@@ -14,16 +14,25 @@ export default function AuthPage() {
   const { user } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Parse query parameters from location
-  const searchParams = new URLSearchParams(location.split('?')[1]);
+  // Parse query parameters from location or window.location.search
+  const searchString = location.split('?')[1] || window.location.search.substring(1) || '';
+  const searchParams = new URLSearchParams(searchString);
   const isSignup = searchParams.get("signup") === "true";
+  
+  // Log for debugging
+  console.log("Current location:", location);
+  console.log("Window location search:", window.location.search);
+  console.log("Search string:", searchString);
+  console.log("Query params:", searchParams.toString());
+  console.log("isSignup:", isSignup);
 
-  // Redirect to home if already logged in
+  // Redirect to dashboard if already logged in
   useEffect(() => {
     if (user) {
-      setLocation("/");
+      // Use window.location for a full page reload to ensure proper state
+      window.location.href = "/user-dashboard";
     }
-  }, [user, setLocation]);
+  }, [user]);
 
   const scrollToTop = () => {
     if (containerRef.current) {

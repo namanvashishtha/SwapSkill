@@ -1,4 +1,3 @@
-import Navbar from "@/components/layout/navbar";
 import HeroSection from "@/components/home/hero-section";
 import SkillScrollbar from "@/components/home/skill-scrollbar";
 import FeaturesSection from "@/components/home/features-section";

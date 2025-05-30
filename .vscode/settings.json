@@ -1,0 +1,8 @@
+{
+    "zencoder.enableRepoIndexing": true,
+    "mongodb.connectionSaving.hideOptionsPanelOnSave": false,
+    "mongodb.connection.tls": true,
+    "mongodb.connection.tlsAllowInvalidCertificates": true,
+    "mongodb.connection.tlsAllowInvalidHostnames": true,
+    "mongodb.connection.uri": "mongodb+srv://user:System123@cluster0.bwfouog.mongodb.net/"
+}

@@ -7,8 +7,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <div className="text-2xl font-bold mb-4">
-              <span className="text-secondary">Swap</span>
-              <span className="text-white">Skill</span>
+              <span className="text-secondary">Skill</span>
+              <span className="text-white">Swap</span>
             </div>
             <p className="text-gray-400 mb-4">Trade talents, not cash. Learn what you love from people who know.</p>
             <div className="flex space-x-4">
@@ -33,36 +33,36 @@ export default function Footer() {
           <div>
             <h4 className="text-lg font-bold mb-4">Resources</h4>
             <ul className="space-y-2">
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Community Guidelines</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Safety Tips</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Success Stories</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Skill Categories</Link></li>
+              <li><Link href="/blog" className="text-gray-400 hover:text-white transition">Blog</Link></li>
+              <li><Link href="/support" className="text-gray-400 hover:text-white transition">Support</Link></li>
+              <li><Link href="/skill-categories" className="text-gray-400 hover:text-white transition">Skill Categories</Link></li>
+              <li><Link href="/faq" className="text-gray-400 hover:text-white transition">FAQ</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="text-lg font-bold mb-4">Company</h4>
             <ul className="space-y-2">
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">About Us</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Careers</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Press</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Contact</Link></li>
+              <li><Link href="/about" className="text-gray-400 hover:text-white transition">About Us</Link></li>
+              <li><Link href="/contact" className="text-gray-400 hover:text-white transition">Contact</Link></li>
+              <li><Link href="/careers" className="text-gray-400 hover:text-white transition">Careers</Link></li>
+              <li><Link href="/press" className="text-gray-400 hover:text-white transition">Press</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="text-lg font-bold mb-4">Legal</h4>
             <ul className="space-y-2">
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Terms of Service</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Privacy Policy</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Cookie Policy</Link></li>
-              <li><Link href="#" className="text-gray-400 hover:text-white transition">Community Standards</Link></li>
+              <li><Link href="/terms" className="text-gray-400 hover:text-white transition">Terms of Service</Link></li>
+              <li><Link href="/privacy-policy" className="text-gray-400 hover:text-white transition">Privacy Policy</Link></li>
+              <li><Link href="/cookie-policy" className="text-gray-400 hover:text-white transition">Cookie Policy</Link></li>
+              <li><Link href="/accessibility" className="text-gray-400 hover:text-white transition">Accessibility</Link></li>
             </ul>
           </div>
         </div>
         
         <div className="border-t border-gray-800 mt-12 pt-8 text-sm text-gray-400 text-center">
-          <p>&copy; {new Date().getFullYear()} SwapSkill. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} SkillSwap. All rights reserved.</p>
         </div>
       </div>
     </footer>

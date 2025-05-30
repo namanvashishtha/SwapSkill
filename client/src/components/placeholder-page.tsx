@@ -1,8 +1,7 @@
 import { motion } from "framer-motion";
-import Navbar from "@/components/layout/navbar";
-import Footer from "@/components/home/footer";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import Footer from "@/components/home/footer";
 
 interface PlaceholderPageProps {
   title: string;
@@ -13,8 +12,6 @@ interface PlaceholderPageProps {
 export default function PlaceholderPage({ title, description, comingSoon = true }: PlaceholderPageProps) {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
-      
       <main className="flex-grow">
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-primary to-primary-light text-white py-20">
@@ -84,7 +81,6 @@ export default function PlaceholderPage({ title, description, comingSoon = true 
           </div>
         </section>
       </main>
-      
       <Footer />
     </div>
   );

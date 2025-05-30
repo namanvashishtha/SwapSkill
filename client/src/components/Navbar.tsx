@@ -9,13 +9,16 @@ export default function Navbar() {
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
+        // Force immediate navigation to home page after logout
         setLocation("/");
+        // Force a page refresh to ensure all state is cleared
+        // window.location.href = "/"; // Alternative approach if needed
       },
     });
   };
 
   return (
-    <nav className="flex items-center justify-between p-4 bg-white shadow-md">
+    <nav className="flex items-center justify-between p-4 bg-white shadow-md fixed top-0 left-0 right-0 z-[100]">
       <div className="flex items-center space-x-4">
         <Link href="/" className="text-xl font-bold">
           <span className="text-pink-500">Swap</span>
@@ -32,44 +35,56 @@ export default function Navbar() {
       <div className="flex items-center space-x-4">
         {!user ? (
           <>
-            <Link
+            <a
               href="/auth"
-              className="text-black font-medium hover:text-purple-700 transition py-2 px-4"
+              onClick={(e) => {
+                e.preventDefault();
+                console.log("Login button clicked");
+                // Force a full page navigation to ensure query parameters are properly handled
+                window.location.href = "/auth";
+              }}
+              className="text-black font-medium hover:text-purple-700 transition py-2 px-4 inline-block"
             >
               LOGIN
-            </Link>
-            <Link
+            </a>
+            <a
               href="/auth?signup=true"
-              className="bg-pink-500 hover:bg-pink-600 text-white font-medium py-2 px-4 rounded-full transition"
+              onClick={(e) => {
+                e.preventDefault();
+                console.log("Signup button clicked");
+                // Force a full page navigation to ensure query parameters are properly handled
+                window.location.href = "/auth?signup=true";
+              }}
+              className="bg-pink-500 hover:bg-white text-white font-medium py-2 px-4 rounded-full transition inline-block border border-pink-500 group"
             >
-              SIGN UP
-            </Link>
+              <span className="group-hover:text-pink-500 transition-colors">SIGN UP</span>
+            </a>
           </>
         ) : (
           <>
             <span className="text-gray-700 font-semibold text-lg mr-4">
               Hello, {user.username}
             </span>
-            <Button
-                onClick={handleLogout}
-                className="bg-red-500 text-white py-2 px-4 rounded relative overflow-hidden 
-                          transition-all duration-300 ease-in-out
-                          hover:bg-white hover:text-red-500
-                          before:content-[''] 
-                          before:absolute 
-                          before:inset-0 
-                          before:bg-white 
-                          before:scale-x-0 
-                          before:origin-left 
-                          before:transition-transform 
-                          before:duration-300 
-                          before:ease-in-out 
-                          hover:before:scale-x-100
-                          z-10"
-              >
-                <span className="relative z-20">Logout</span>
-              </Button>
-
+            <Link
+              href="/profile"
+              className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-full transition mr-2"
+            >
+              Profile
+            </Link>
+            <Link
+              href="/user-dashboard"
+              className="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-full transition mr-2"
+            >
+              Dashboard
+            </Link>
+            <button
+              onClick={handleLogout}
+              type="button"
+              className="bg-red-500 text-white font-medium py-2 px-4 rounded-full relative overflow-hidden transition-all duration-300 ease-in-out border border-red-500 hover:text-red-500 group"
+            >
+              <span className="relative z-10">Logout</span>
+              <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
+            </button>
           </>
         )}
       </div>

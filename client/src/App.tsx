@@ -8,14 +8,24 @@ import BlogPage from "@/pages/blog-page";
 import CareersPage from "@/pages/careers-page";
 import ContactPage from "@/pages/contact-page";
 import CommunityGuidelinesPage from "@/pages/community-guidelines-page";
+import SafetyTipsPage from "@/pages/safety-tips-page";
+import SuccessStoriesPage from "@/pages/success-stories-page";
+import SkillCategoriesPage from "@/pages/skill-categories-page";
+import SupportPage from "@/pages/support-page";
+import PressPage from "@/pages/press-page";
+import TermsPage from "@/pages/terms-page";
+import PrivacyPolicyPage from "@/pages/privacy-policy-page";
+import CookiePolicyPage from "@/pages/cookie-policy-page";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import UserDashboard from "@/pages/user-dashboard";
 import ProfileEdit from "@/pages/profile-edit";
+import ProfilePage from "@/pages/profile-page";
 import ScrollToTop from "@/components/ScrollToTop";
+import DynamicScrollbar from "@/components/DynamicScrollbar";
 import { Loader2 } from "lucide-react";
+// Import the main Navbar component
 import Navbar from "@/components/Navbar";
-
 
 
 // Component to handle the home route and redirect authenticated users
@@ -31,7 +41,14 @@ function HomeRoute() {
   }
 
   if (user) {
-    return <Redirect to="/user-dashboard" />;
+    // Use window.location for a full page reload to ensure proper state
+    window.location.href = "/user-dashboard";
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-border" />
+        <span className="ml-2">Redirecting to dashboard...</span>
+      </div>
+    );
   }
 
   return <HomePage />;
@@ -44,16 +61,52 @@ function Router() {
       <Route path="/auth">
         <AuthPage />
       </Route>
+      
+      <Route path="/blog">
+        <BlogPage />
+      </Route>
+
       <Route path="/about">
         <AboutPage />
       </Route>
       <Route path="/team">
         <TeamPage />
       </Route>
+      <Route path="/careers">
+        <CareersPage />
+      </Route>
+      <Route path="/contact">
+        <ContactPage />
+      </Route>
       <Route path="/community-guidelines">
         <CommunityGuidelinesPage />
       </Route>
+      <Route path="/safety-tips">
+        <SafetyTipsPage />
+      </Route>
+      <Route path="/success-stories">
+        <SuccessStoriesPage />
+      </Route>
+      <Route path="/skill-categories">
+        <SkillCategoriesPage />
+      </Route>
+      <Route path="/support">
+        <SupportPage />
+      </Route>
+      <Route path="/press">
+        <PressPage />
+      </Route>
+      <Route path="/terms">
+        <TermsPage />
+      </Route>
+      <Route path="/privacy-policy">
+        <PrivacyPolicyPage />
+      </Route>
+      <Route path="/cookie-policy">
+        <CookiePolicyPage />
+      </Route>
       <ProtectedRoute path="/profile-edit" component={ProfileEdit} />
+      <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/user-dashboard" component={UserDashboard} />
       <Route>
         <NotFound />
@@ -66,8 +119,11 @@ function App() {
   return (
     <AuthProvider>
       <ScrollToTop>
+        <DynamicScrollbar />
         <Navbar />
-        <Router />
+        <div className="pt-16"> {/* Add padding to account for fixed navbar */}
+          <Router />
+        </div>
       </ScrollToTop>
     </AuthProvider>
   );
