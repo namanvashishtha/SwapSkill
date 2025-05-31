@@ -1,4 +1,4 @@
-# 🌟 SkillSwap
+# 🌟 SwapSkill
 **Advanced Skill Exchange Platform with Smart Matching**
 
 A cutting-edge full-stack application that connects passionate learners and teachers through intelligent skill matching. Built with modern web technologies and advanced user experience design.
