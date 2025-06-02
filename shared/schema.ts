@@ -26,6 +26,44 @@ export const skillSchema = z.object({
 
 export const insertSkillSchema = skillSchema.omit({ id: true });
 
+// Match schema for skill matching system
+export const matchSchema = z.object({
+  id: z.number(),
+  fromUserId: z.number(),
+  toUserId: z.number(),
+  status: z.enum(["pending", "accepted", "rejected"]),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const insertMatchSchema = matchSchema.omit({ id: true, createdAt: true, updatedAt: true });
+
+// Notification schema
+export const notificationSchema = z.object({
+  id: z.number(),
+  userId: z.number(),
+  type: z.enum(["match_request", "match_accepted", "message"]),
+  title: z.string(),
+  message: z.string(),
+  isRead: z.boolean(),
+  relatedUserId: z.number().optional(),
+  relatedMatchId: z.number().optional(),
+  createdAt: z.date(),
+});
+
+export const insertNotificationSchema = notificationSchema.omit({ id: true, createdAt: true });
+
+// Chat message schema
+export const chatMessageSchema = z.object({
+  id: z.number(),
+  matchId: z.number(),
+  senderId: z.number(),
+  message: z.string(),
+  createdAt: z.date(),
+});
+
+export const insertChatMessageSchema = chatMessageSchema.omit({ id: true, createdAt: true });
+
 // For compatibility with existing code, we'll keep a users object
 export const users = {
   name: "users",
@@ -59,5 +97,11 @@ export const skills = {
 // Export types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertSkill = z.infer<typeof insertSkillSchema>;
+export type InsertMatch = z.infer<typeof insertMatchSchema>;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type User = z.infer<typeof userSchema>;
 export type Skill = z.infer<typeof skillSchema>;
+export type Match = z.infer<typeof matchSchema>;
+export type Notification = z.infer<typeof notificationSchema>;
+export type ChatMessage = z.infer<typeof chatMessageSchema>;

@@ -21,6 +21,9 @@ import { ProtectedRoute } from "@/lib/protected-route";
 import UserDashboard from "@/pages/user-dashboard";
 import ProfileEdit from "@/pages/profile-edit";
 import ProfilePage from "@/pages/profile-page";
+import MatchPage from "@/pages/match-page";
+import NotificationsPage from "./pages/notifications-page";
+import ChatPage from "@/pages/chat-page";
 import ScrollToTop from "@/components/ScrollToTop";
 import DynamicScrollbar from "@/components/DynamicScrollbar";
 import { Loader2 } from "lucide-react";
@@ -108,6 +111,9 @@ function Router() {
       <ProtectedRoute path="/profile-edit" component={ProfileEdit} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/user-dashboard" component={UserDashboard} />
+      <ProtectedRoute path="/match" component={MatchPage} />
+      <ProtectedRoute path="/notifications" component={NotificationsPage} />
+      <ProtectedRoute path="/chat" component={ChatPage} />
       <Route>
         <NotFound />
       </Route>

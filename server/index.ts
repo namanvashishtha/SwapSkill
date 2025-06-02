@@ -41,13 +41,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize storage (MongoDB with memory fallback)
+  // Initialize storage (MongoDB required - fail if not available)
   try {
     await storage.initialize();
     log('Storage initialized successfully');
   } catch (error) {
     log(`Failed to initialize storage: ${error instanceof Error ? error.message : String(error)}`);
-    log('Application will continue with memory storage only');
+    log('MongoDB is required for this application. Exiting...');
+    process.exit(1); // Exit the application if MongoDB is not available
   }
 
   const server = await registerRoutes(app);

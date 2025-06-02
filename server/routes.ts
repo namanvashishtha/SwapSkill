@@ -4,7 +4,7 @@ import { setupAuth } from "./auth.js";
 import { storage } from "./storage.js";
 import { setupStatusRoutes } from "./routes/status.js";
 import { setupAdminRoutes } from "./routes/admin.js";
-import { updateUserBioAndImage } from "./db/mongodb.js";
+import { updateUserBioAndImage, UserModel, mongoUserToAppUser } from "./db/mongodb.js";
 import multer from "multer";
 import path from "path";
 import * as fs from "fs";
@@ -295,17 +295,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all users API (for skill matching)
   app.get("/api/users", async (req: express.Request, res: express.Response) => {
     try {
-      // In a real app, you would implement pagination and filtering
-      // For now, we'll just return all users from memory storage
-      const users = Array.from(storage['memStorage']['users'].values()).map(user => {
+      console.log("GET /api/users - Starting to fetch users...");
+      
+      // Check authentication
+      if (!req.isAuthenticated()) {
+        console.log("GET /api/users - User not authenticated");
+        return res.status(401).json({ message: "You must be logged in to view users" });
+      }
+      
+      console.log("GET /api/users - User authenticated:", (req.user as User).username);
+      
+      // Test MongoDB connection first
+      console.log("GET /api/users - Testing MongoDB connection...");
+      const mongoose = await import("mongoose");
+      console.log("GET /api/users - MongoDB connection state:", mongoose.default.connection.readyState);
+      
+      // Get all users from MongoDB
+      console.log("GET /api/users - Fetching users from MongoDB...");
+      const mongoUsers = await UserModel.find({}).lean();
+      console.log(`GET /api/users - Found ${mongoUsers.length} users in MongoDB`);
+      
+      if (mongoUsers.length > 0) {
+        console.log("GET /api/users - Sample user:", {
+          ...mongoUsers[0],
+          password: "[REDACTED]"
+        });
+      }
+      
+      const users = mongoUsers.map(mongoUser => {
+        console.log("GET /api/users - Converting user:", mongoUser.id || mongoUser._id);
+        const user = mongoUserToAppUser(mongoUser);
         // Don't return passwords
         const { password, ...userWithoutPassword } = user;
         return userWithoutPassword;
       });
       
+      console.log(`GET /api/users - Processed ${users.length} users, sending response`);
       res.json(users);
     } catch (error) {
       console.error("Error fetching users:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+      console.error("Error name:", error instanceof Error ? error.name : "Unknown");
+      console.error("Error constructor:", error instanceof Error ? error.constructor.name : "Unknown");
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Error fetching users" 
       });
@@ -350,6 +381,534 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fixing user:", error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Error fixing user" 
+      });
+    }
+  });
+
+  // Matching system API routes
+  
+  // Get all match requests for current user
+  app.get("/api/matches", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      
+      // Get all matches where user is either sender or receiver
+      const matches = await storage.getMatches({
+        $or: [
+          { fromUserId: userId },
+          { toUserId: userId }
+        ]
+      });
+      
+      res.json(matches);
+    } catch (error) {
+      console.error("Error fetching matches:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching matches" 
+      });
+    }
+  });
+
+  // Get pending match requests count for current user
+  app.get("/api/matches/pending/count", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      
+      // Count pending matches where current user is the receiver
+      const pendingMatches = await storage.getMatches({
+        toUserId: userId,
+        status: 'pending'
+      });
+      const pendingCount = pendingMatches.length;
+      
+      res.json({ count: pendingCount });
+    } catch (error) {
+      console.error("Error fetching pending matches count:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching pending matches count" 
+      });
+    }
+  });
+
+  // Get pending match requests received by current user
+  app.get("/api/matches/pending", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      
+      // Get pending matches where current user is the receiver
+      const pendingMatchesRaw = await storage.getMatches({
+        toUserId: userId,
+        status: 'pending'
+      });
+      
+      const pendingMatches = await Promise.all(
+        pendingMatchesRaw.map(async (match) => {
+          const fromUser = await storage.getUser(match.fromUserId);
+          return {
+            ...match,
+            fromUser: fromUser ? {
+              id: fromUser.id,
+              username: fromUser.username,
+              fullName: fromUser.fullName,
+              imageUrl: fromUser.imageUrl,
+              skillsToTeach: fromUser.skillsToTeach,
+              skillsToLearn: fromUser.skillsToLearn
+            } : null
+          };
+        })
+      );
+      
+      const filteredPendingMatches = pendingMatches.filter(match => match.fromUser !== null);
+      
+      res.json(filteredPendingMatches);
+    } catch (error) {
+      console.error("Error fetching pending matches:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching pending matches" 
+      });
+    }
+  });
+
+  // Get accepted matches count for current user
+  app.get("/api/matches/accepted/count", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      
+      // Count accepted matches where current user is involved
+      const acceptedMatches = await storage.getMatches({
+        $or: [
+          { fromUserId: userId },
+          { toUserId: userId }
+        ],
+        status: 'accepted'
+      });
+      const acceptedCount = acceptedMatches.length;
+      
+      res.json({ count: acceptedCount });
+    } catch (error) {
+      console.error("Error fetching accepted matches count:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching accepted matches count" 
+      });
+    }
+  });
+
+  // Get accepted matches for current user
+  app.get("/api/matches/accepted", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      
+      // Get accepted matches where current user is involved
+      const acceptedMatchesRaw = await storage.getMatches({
+        $or: [
+          { fromUserId: userId },
+          { toUserId: userId }
+        ],
+        status: 'accepted'
+      });
+      
+      const acceptedMatches = await Promise.all(
+        acceptedMatchesRaw.map(async (match) => {
+          const otherUserId = match.fromUserId === userId ? match.toUserId : match.fromUserId;
+          const otherUser = await storage.getUser(otherUserId);
+          return {
+            ...match,
+            otherUser: otherUser ? {
+              id: otherUser.id,
+              username: otherUser.username,
+              fullName: otherUser.fullName,
+              imageUrl: otherUser.imageUrl,
+              skillsToTeach: otherUser.skillsToTeach,
+              skillsToLearn: otherUser.skillsToLearn
+            } : null
+          };
+        })
+      );
+      
+      const filteredAcceptedMatches = acceptedMatches.filter(match => match.otherUser !== null);
+      
+      res.json(filteredAcceptedMatches);
+    } catch (error) {
+      console.error("Error fetching accepted matches:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching accepted matches" 
+      });
+    }
+  });
+
+  // Send a match request
+  app.post("/api/matches", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const fromUserId = (req.user as User).id;
+      const { toUserId } = req.body;
+      
+      if (!toUserId || fromUserId === toUserId) {
+        return res.status(400).json({ message: "Invalid user ID" });
+      }
+      
+      // Check if target user exists
+      const targetUser = await storage.getUser(toUserId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Check if match request already exists
+      const existingMatches = await storage.getMatches({
+        $or: [
+          { fromUserId: fromUserId, toUserId: toUserId },
+          { fromUserId: toUserId, toUserId: fromUserId }
+        ]
+      });
+      const existingMatch = existingMatches.length > 0 ? existingMatches[0] : null;
+      
+      if (existingMatch) {
+        return res.status(400).json({ message: "Match request already exists" });
+      }
+      
+      // Create new match request
+      const newMatch = {
+        fromUserId,
+        toUserId,
+        status: 'pending' as const,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Save match to MongoDB (this will assign an ID)
+      const savedMatch = await storage.saveMatch(newMatch);
+      
+      // Create notification for the target user
+      const notification = {
+        userId: toUserId,
+        type: 'match_request' as const,
+        title: 'New Match Request',
+        message: `${(req.user as User).username} wants to match with you!`,
+        isRead: false,
+        relatedUserId: fromUserId,
+        relatedMatchId: savedMatch.id, // Use the saved match which has an id property
+        createdAt: new Date()
+      };
+      
+      // Save notification to MongoDB (this will assign an ID)
+      await storage.saveNotification(notification);
+      
+      res.status(201).json(savedMatch);
+    } catch (error) {
+      console.error("Error creating match request:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error creating match request" 
+      });
+    }
+  });
+
+  // Accept a match request
+  app.post("/api/matches/:matchId/accept", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const matchId = parseInt(req.params.matchId, 10);
+      
+      const match = await storage.getMatch(matchId);
+      if (!match) {
+        return res.status(404).json({ message: "Match request not found" });
+      }
+      
+      // Only the receiver can accept the match
+      if (match.toUserId !== userId) {
+        return res.status(403).json({ message: "You can only accept match requests sent to you" });
+      }
+      
+      if (match.status !== 'pending') {
+        return res.status(400).json({ message: "Match request is no longer pending" });
+      }
+      
+      // Update match status
+      const updatedMatch = await storage.updateMatch(matchId, {
+        status: 'accepted'
+      });
+      
+      // Create notification for the sender
+      const notification = {
+        userId: match.fromUserId,
+        type: 'match_accepted' as const,
+        title: 'Match Accepted!',
+        message: `${(req.user as User).username} accepted your match request!`,
+        isRead: false,
+        relatedUserId: userId,
+        relatedMatchId: matchId,
+        createdAt: new Date()
+      };
+      
+      // Save notification to MongoDB (this will assign an ID)
+      await storage.saveNotification(notification);
+      
+      res.json({ message: "Match request accepted", match: updatedMatch });
+    } catch (error) {
+      console.error("Error accepting match request:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error accepting match request" 
+      });
+    }
+  });
+
+  // Reject a match request
+  app.post("/api/matches/:matchId/reject", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const matchId = parseInt(req.params.matchId, 10);
+      
+      const match = await storage.getMatch(matchId);
+      if (!match) {
+        return res.status(404).json({ message: "Match request not found" });
+      }
+      
+      // Only the receiver can reject the match
+      if (match.toUserId !== userId) {
+        return res.status(403).json({ message: "You can only reject match requests sent to you" });
+      }
+      
+      if (match.status !== 'pending') {
+        return res.status(400).json({ message: "Match request is no longer pending" });
+      }
+      
+      // Update match status
+      await storage.updateMatch(matchId, {
+        status: 'rejected'
+      });
+      
+      res.json({ message: "Match request rejected" });
+    } catch (error) {
+      console.error("Error rejecting match request:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error rejecting match request" 
+      });
+    }
+  });
+
+  // Get notifications count for current user
+  app.get("/api/notifications/count", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      
+      const notifications = await storage.getNotifications({
+        userId: userId,
+        isRead: false
+      });
+      const unreadCount = notifications.length;
+      
+      res.json({ count: unreadCount });
+    } catch (error) {
+      console.error("Error fetching notifications count:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching notifications count" 
+      });
+    }
+  });
+
+  // Get notifications for current user
+  app.get("/api/notifications", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      
+      const notifications = await storage.getNotifications({
+        userId: userId
+      });
+      
+      // Sort by creation date (newest first)
+      notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching notifications" 
+      });
+    }
+  });
+
+  // Mark notification as read
+  app.post("/api/notifications/:notificationId/read", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const notificationId = parseInt(req.params.notificationId, 10);
+      
+      // Get the notification first to verify ownership
+      const notifications = await storage.getNotifications({
+        id: notificationId,
+        userId: userId
+      });
+      
+      if (notifications.length === 0) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      
+      const notification = notifications[0];
+      
+      if (notification.userId !== userId) {
+        return res.status(403).json({ message: "You can only mark your own notifications as read" });
+      }
+      
+      // Update the notification to mark as read
+      const updatedNotification = await storage.updateNotification(notificationId, {
+        isRead: true
+      });
+      
+      res.json({ message: "Notification marked as read", notification: updatedNotification });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error marking notification as read" 
+      });
+    }
+  });
+
+  // Get unread messages count for current user
+  app.get("/api/messages/unread/count", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      
+      // For now, return 0 since we don't have read/unread tracking for messages yet
+      // This can be enhanced later to track message read status
+      res.json({ count: 0 });
+    } catch (error) {
+      console.error("Error fetching unread messages count:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching unread messages count" 
+      });
+    }
+  });
+
+  // Get messages for a match
+  app.get("/api/matches/:matchId/messages", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const matchId = parseInt(req.params.matchId, 10);
+      
+      const match = await storage.getMatch(matchId);
+      if (!match) {
+        return res.status(404).json({ message: "Match not found" });
+      }
+      
+      // Check if user is part of this match
+      if (match.fromUserId !== userId && match.toUserId !== userId) {
+        return res.status(403).json({ message: "You can only view messages for your own matches" });
+      }
+      
+      if (match.status !== 'accepted') {
+        return res.status(400).json({ message: "You can only chat with accepted matches" });
+      }
+      
+      const messages = await storage.getMessages({
+        matchId: matchId
+      });
+      
+      // Sort by creation date (oldest first for chat)
+      messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching messages" 
+      });
+    }
+  });
+
+  // Send a message
+  app.post("/api/matches/:matchId/messages", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const matchId = parseInt(req.params.matchId, 10);
+      const { message } = req.body;
+      
+      if (!message || !message.trim()) {
+        return res.status(400).json({ message: "Message cannot be empty" });
+      }
+      
+      const match = await storage.getMatch(matchId);
+      if (!match) {
+        return res.status(404).json({ message: "Match not found" });
+      }
+      
+      // Check if user is part of this match
+      if (match.fromUserId !== userId && match.toUserId !== userId) {
+        return res.status(403).json({ message: "You can only send messages to your own matches" });
+      }
+      
+      if (match.status !== 'accepted') {
+        return res.status(400).json({ message: "You can only chat with accepted matches" });
+      }
+      
+      const newMessage = {
+        matchId,
+        senderId: userId,
+        message: message.trim(),
+        createdAt: new Date()
+      };
+      
+      // Save message to MongoDB (this will assign an ID)
+      await storage.saveMessage(newMessage);
+      
+      res.status(201).json(newMessage);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error sending message" 
       });
     }
   });

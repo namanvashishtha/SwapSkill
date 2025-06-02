@@ -15,12 +15,50 @@ export async function connectToMongoDB() {
     if (!MONGODB_URI || MONGODB_URI.includes('user:System123')) {
       console.warn('Warning: Using default MongoDB connection string. Consider setting MONGODB_URI environment variable.');
     }
-    
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000, // Reduced timeout for faster feedback
-      connectTimeoutMS: 10000,         // Reduced timeout for faster feedback
-      socketTimeoutMS: 45000,          // Timeout for socket inactivity
-    });
+
+    // First attempt with standard configuration
+    try {
+      await mongoose.connect(MONGODB_URI, {
+        serverSelectionTimeoutMS: 15000,  // Increased timeout for better reliability
+        connectTimeoutMS: 15000,          // Increased timeout for better reliability
+        socketTimeoutMS: 45000,           // Timeout for socket inactivity
+        maxPoolSize: 10,                  // Maintain up to 10 socket connections
+        minPoolSize: 1,                   // Reduced minimum connections
+        maxIdleTimeMS: 30000,             // Close connections after 30 seconds of inactivity
+        bufferCommands: false,            // Disable mongoose buffering
+        retryWrites: true,                // Enable retryable writes
+        w: 'majority',                    // Write concern
+        // Family 4 forces IPv4, which can help with some connection issues
+        family: 4,
+      });
+      console.log('Connected using primary configuration');
+    } catch (primaryError) {
+      console.log('Primary connection attempt failed, trying fallback configuration...');
+      console.log('Primary error:', primaryError instanceof Error ? primaryError.message : String(primaryError));
+      
+      // Fallback attempt with different settings
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 20000,
+            connectTimeoutMS: 20000,
+            socketTimeoutMS: 60000,
+            maxPoolSize: 5,
+            minPoolSize: 1,
+            bufferCommands: false,
+            retryWrites: true,
+            w: 'majority',
+            // Try without explicit family setting
+          });
+          console.log('Connected using fallback configuration (development mode)');
+        } catch (fallbackError) {
+          console.log('Fallback connection also failed:', fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
+          throw primaryError; // Re-throw the original error
+        }
+      } else {
+        throw primaryError; // Re-throw the original error in production
+      }
+    }
     
     // Test the connection by performing a simple operation
     // Check if connection.db exists before trying to access it
@@ -85,14 +123,22 @@ export async function connectToMongoDB() {
       } else if (error.message.includes('not whitelisted')) {
         console.error('IP whitelist error: Your current IP address needs to be added to MongoDB Atlas whitelist');
         console.error('Visit: https://www.mongodb.com/docs/atlas/security-whitelist/ for instructions');
+      } else if (error.message.includes('SSL') || error.message.includes('TLS') || error.message.includes('ssl') || error.message.includes('tls')) {
+        console.error('SSL/TLS error: There is an issue with the secure connection to MongoDB Atlas');
+        console.error('This could be due to:');
+        console.error('1. Network firewall blocking SSL connections');
+        console.error('2. Corporate proxy interfering with SSL');
+        console.error('3. Outdated Node.js version');
+        console.error('4. MongoDB Atlas cluster configuration issue');
+        console.error('Continuing with memory storage for development...');
+      } else if (error.message.includes('MongoNetworkError')) {
+        console.error('Network error: Unable to reach MongoDB Atlas');
+        console.error('This could be due to network connectivity issues or firewall restrictions');
       }
     }
     
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Development mode: Continuing without MongoDB connection');
-      return false; // Allow app to continue in development with a return value
-    }
-    throw error; // Throw in production
+    // Always throw error - MongoDB is required for all environments
+    throw error;
   }
 }
 
@@ -106,7 +152,7 @@ const userSchema = new mongoose.Schema({
   location: { type: String },
   skillsToTeach: { type: [String], default: [] },
   skillsToLearn: { type: [String], default: [] },
-  bio: { type: String, default: '', required: true }, // Make bio required with default empty string
+  bio: { type: String, default: '' }, // Bio field with default empty string
   imageUrl: { type: String, default: null }, // Keep imageUrl optional but with default null
   createdAt: { type: Date, default: Date.now }
 });
@@ -120,9 +166,44 @@ const skillSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Match schema for skill matching system
+const matchSchema = new mongoose.Schema({
+  id: { type: Number, required: true, unique: true },
+  fromUserId: { type: Number, required: true },
+  toUserId: { type: Number, required: true },
+  status: { type: String, required: true, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// Notification schema
+const notificationSchema = new mongoose.Schema({
+  id: { type: Number, required: true, unique: true },
+  userId: { type: Number, required: true },
+  type: { type: String, required: true, enum: ['match_request', 'match_accepted', 'message'] },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  isRead: { type: Boolean, default: false },
+  relatedUserId: { type: Number },
+  relatedMatchId: { type: Number },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// Chat message schema
+const chatMessageSchema = new mongoose.Schema({
+  id: { type: Number, required: true, unique: true },
+  matchId: { type: Number, required: true },
+  senderId: { type: Number, required: true },
+  message: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
 // Create models
 export const UserModel = mongoose.model('User', userSchema);
 export const SkillModel = mongoose.model('Skill', skillSchema);
+export const MatchModel = mongoose.model('Match', matchSchema);
+export const NotificationModel = mongoose.model('Notification', notificationSchema);
+export const ChatMessageModel = mongoose.model('ChatMessage', chatMessageSchema);
 
 // Helper functions
 export function mongoUserToAppUser(mongoUser: any): User & { bio?: string; imageUrl?: string | null } {

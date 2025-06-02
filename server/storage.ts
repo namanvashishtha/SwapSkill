@@ -1,419 +1,456 @@
 import { users, type User, type InsertUser } from "../shared/schema.js";
 import session from "express-session";
-import createMemoryStore from "memorystore";
 import MongoStore from "connect-mongo";
-import { UserModel, mongoUserToAppUser, appUserToMongoUser, connectToMongoDB, MONGODB_URI } from "./db/mongodb.js";
+import { 
+  UserModel, 
+  SkillModel, 
+  MatchModel, 
+  NotificationModel, 
+  ChatMessageModel,
+  mongoUserToAppUser, 
+  appUserToMongoUser, 
+  connectToMongoDB, 
+  MONGODB_URI 
+} from "./db/mongodb.js";
 
-const MemoryStore = createMemoryStore(session);
-
-// modify the interface with any CRUD methods
-// you might need
-
+// Simplified interface for pure MongoDB storage
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, userData: Partial<User>): Promise<User | undefined>;
   deleteUser(id: number): Promise<boolean>;
-  sessionStore: any; // Using any for now to simplify typings
+  sessionStore: any;
   initialize(): Promise<void>;
-}
-
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  currentId: number;
-  sessionStore: any; // Using any for now to simplify typings
-
-  constructor() {
-    this.users = new Map();
-    this.currentId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // 24 hours
-    });
-  }
-
-  async initialize(): Promise<void> {
-    // Add some initial users if the map is empty
-    if (this.users.size === 0) {
-      const initialUsers: InsertUser[] = [
-        {
-          username: "priya_sharma",
-          password: "$2b$10$5DdJMx9lIKUhpL0JFCYQgOEJgZGWOVJ6.s57aCGxzn5Zix5OXw4NO", // "password123"
-          fullName: "Priya Sharma",
-          email: "priya.sharma@example.com",
-          location: "Mumbai, India",
-          skillsToTeach: ["Yoga", "Meditation"],
-          skillsToLearn: ["Python", "Web Development"],
-        },
-        {
-          username: "raj_patel",
-          password: "$2b$10$5DdJMx9lIKUhpL0JFCYQgOEJgZGWOVJ6.s57aCGxzn5Zix5OXw4NO", // "password123"
-          fullName: "Raj Patel",
-          email: "raj.patel@example.com",
-          location: "Bangalore, India",
-          skillsToTeach: ["Guitar", "Music Theory"],
-          skillsToLearn: ["Digital Marketing", "SEO"],
-        },
-        {
-          username: "ananya_desai",
-          password: "$2b$10$5DdJMx9lIKUhpL0JFCYQgOEJgZGWOVJ6.s57aCGxzn5Zix5OXw4NO", // "password123"
-          fullName: "Ananya Desai",
-          email: "ananya.desai@example.com",
-          location: "Delhi, India",
-          skillsToTeach: ["Cooking", "Baking"],
-          skillsToLearn: ["Photography", "Video Editing"],
-        },
-      ];
-      
-      for (const user of initialUsers) {
-        await this.createUser(user);
-      }
-    }
-  }
-
-  async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    
-    // Ensure null values instead of undefined for nullable fields
-    // and explicitly set bio and imageUrl
-    const user: User = { 
-      ...insertUser, 
-      id,
-      fullName: insertUser.fullName || null,
-      email: insertUser.email || null,
-      location: insertUser.location || null,
-      skillsToTeach: insertUser.skillsToTeach || null,
-      skillsToLearn: insertUser.skillsToLearn || null,
-      bio: insertUser.bio || '', // Empty string for optional bio
-      imageUrl: insertUser.imageUrl || null // null is allowed for imageUrl since it's nullable
-    };
-    
-    console.log('MemStorage - Creating user:', {
-      ...user,
-      password: '[REDACTED]'
-    });
-    
-    this.users.set(id, user);
-    return user;
-  }
-
-  async updateUser(id: number, userData: Partial<User>): Promise<User | undefined> {
-    const existingUser = this.users.get(id);
-    if (!existingUser) return undefined;
-
-    console.log('MemStorage - Updating user, existing data:', {
-      ...existingUser,
-      password: '[REDACTED]'
-    });
-    
-    console.log('MemStorage - Updating user, new data:', {
-      ...userData,
-      password: userData.password ? '[REDACTED]' : undefined
-    });
-
-    // Ensure bio and imageUrl are explicitly handled
-    const updatedUser = { 
-      ...existingUser, 
-      ...userData,
-      // Explicitly handle these fields to ensure they're not lost
-      bio: userData.bio !== undefined ? userData.bio : existingUser.bio || '',
-      imageUrl: userData.imageUrl !== undefined ? userData.imageUrl : existingUser.imageUrl
-    };
-    
-    console.log('MemStorage - Updated user result:', {
-      ...updatedUser,
-      password: '[REDACTED]'
-    });
-    
-    this.users.set(id, updatedUser);
-    return updatedUser;
-  }
-
-  async deleteUser(id: number): Promise<boolean> {
-    return this.users.delete(id);
-  }
+  // MongoDB-specific methods
+  saveMatch(match: any): Promise<any>;
+  saveNotification(notification: any): Promise<void>;
+  saveMessage(message: any): Promise<void>;
+  getNextId(): Promise<number>;
+  // Query methods
+  getMatches(filter?: any): Promise<any[]>;
+  getMatch(id: number): Promise<any | undefined>;
+  updateMatch(id: number, updateData: any): Promise<any | undefined>;
+  getNotifications(filter?: any): Promise<any[]>;
+  updateNotification(id: number, updateData: any): Promise<any | undefined>;
+  getMessages(filter?: any): Promise<any[]>;
 }
 
 export class MongoStorage implements IStorage {
   sessionStore: any;
-  private memStorage: MemStorage;
   private isConnected: boolean = false;
+  private currentId: number = 1;
 
   constructor() {
-    // Create memory storage as fallback first
-    this.memStorage = new MemStorage();
-    
-    // In development, use memory store for sessions to avoid blocking startup
-    if (process.env.NODE_ENV === 'development') {
-      this.sessionStore = this.memStorage.sessionStore;
-      console.log('Using memory session store for development');
-      return;
-    }
-    
-    try {
-      // Create MongoDB session store for production
-      this.sessionStore = MongoStore.create({
-        mongoUrl: MONGODB_URI,
-        ttl: 60 * 60 * 24, // 1 day
-        crypto: {
-          secret: 'skillswap-session-secret'
-        }
-      });
-      console.log('MongoDB session store created successfully');
-    } catch (error) {
-      console.error('Failed to create MongoDB session store:', error);
-      // Fall back to memory store for sessions
-      this.sessionStore = this.memStorage.sessionStore;
-      console.log('Using memory session store as fallback');
-    }
+    // Create MongoDB session store
+    this.sessionStore = MongoStore.create({
+      mongoUrl: MONGODB_URI,
+      ttl: 60 * 60 * 24, // 1 day
+      crypto: {
+        secret: process.env.SESSION_SECRET || 'skillswap-session-secret'
+      }
+    });
+    console.log('MongoDB session store created');
   }
 
   async initialize(): Promise<void> {
-    // Always initialize memory storage first as a fallback
-    await this.memStorage.initialize();
-    console.log('Memory storage initialized successfully');
-    
     try {
-      // Try to connect to MongoDB Atlas
-      const connected = await connectToMongoDB();
-      this.isConnected = !!connected; // Convert to boolean
+      // Connect to MongoDB - this will throw an error if connection fails
+      await connectToMongoDB();
+      this.isConnected = true;
       
-      if (this.isConnected) {
-        console.log('MongoDB connection established');
-        
-        // Only try to sync data if MongoDB connection is successful
-        try {
-          // Sync initial users to MongoDB if they don't exist
-          const users = Array.from(this.memStorage['users'].values());
-          
-          // Use Promise.allSettled to handle individual user sync failures
-          const syncResults = await Promise.allSettled(
-            users.map(async (user) => {
-              try {
-                // Use a shorter timeout for findOne operations
-                const existingUser = await UserModel.findOne({ id: user.id }).maxTimeMS(5000);
-                if (!existingUser) {
-                  await UserModel.create(appUserToMongoUser(user));
-                  return { success: true, id: user.id };
-                }
-                return { success: true, id: user.id, exists: true };
-              } catch (userError) {
-                console.error(`Failed to sync user ${user.id} to MongoDB:`, userError);
-                return { success: false, id: user.id, error: userError };
-              }
-            })
-          );
-          
-          // Log sync results
-          const successCount = syncResults.filter(r => r.status === 'fulfilled' && (r.value as any).success).length;
-          console.log(`Successfully synced ${successCount}/${users.length} users to MongoDB`);
-          
-          console.log('MongoDB storage initialized successfully');
-        } catch (syncError) {
-          console.error('Failed to sync data to MongoDB:', syncError);
-          // Continue with memory storage even if sync fails
-        }
-      } else {
-        // If we're in development mode, this is expected behavior
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Development mode: Using memory storage as primary storage');
-        } else {
-          console.error('Failed to connect to MongoDB in production mode');
-        }
-        
-        // Ensure we're using memory storage
-        this.sessionStore = this.memStorage.sessionStore;
-      }
+      console.log('MongoDB connection established');
+      
+      // Set the current ID based on existing data
+      await this.initializeCurrentId();
+      
+      // Create initial users if they don't exist
+      await this.createInitialUsers();
+      
+      console.log('MongoDB storage initialized successfully');
     } catch (error) {
       console.error('Failed to initialize MongoDB storage:', error);
-      console.log('Continuing with memory storage as fallback');
-      // Ensure we're using memory storage
       this.isConnected = false;
-      this.sessionStore = this.memStorage.sessionStore;
+      throw error; // Always fail if MongoDB is not available
     }
+  }
+
+  private async initializeCurrentId(): Promise<void> {
+    try {
+      // Find the highest ID across all collections
+      const [maxUserId, maxMatchId, maxNotificationId, maxMessageId] = await Promise.all([
+        UserModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean(),
+        MatchModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean(),
+        NotificationModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean(),
+        ChatMessageModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean()
+      ]);
+
+      const maxId = Math.max(
+        maxUserId?.id || 0,
+        maxMatchId?.id || 0,
+        maxNotificationId?.id || 0,
+        maxMessageId?.id || 0
+      );
+
+      this.currentId = maxId + 1;
+      console.log(`Set currentId to ${this.currentId} based on existing data`);
+    } catch (error) {
+      console.error('Error initializing currentId:', error);
+      this.currentId = 1; // Default fallback
+    }
+  }
+
+  private async createInitialUsers(): Promise<void> {
+    const initialUsers: InsertUser[] = [
+      {
+        username: "priya_sharma",
+        password: "$2b$10$5DdJMx9lIKUhpL0JFCYQgOEJgZGWOVJ6.s57aCGxzn5Zix5OXw4NO", // "password123"
+        fullName: "Priya Sharma",
+        email: "priya.sharma@example.com",
+        location: "Mumbai, India",
+        skillsToTeach: ["Yoga", "Meditation"],
+        skillsToLearn: ["Python", "Web Development"],
+      },
+      {
+        username: "raj_patel",
+        password: "$2b$10$5DdJMx9lIKUhpL0JFCYQgOEJgZGWOVJ6.s57aCGxzn5Zix5OXw4NO", // "password123"
+        fullName: "Raj Patel",
+        email: "raj.patel@example.com",
+        location: "Bangalore, India",
+        skillsToTeach: ["Guitar", "Music Theory"],
+        skillsToLearn: ["Digital Marketing", "SEO"],
+      },
+      {
+        username: "ananya_desai",
+        password: "$2b$10$5DdJMx9lIKUhpL0JFCYQgOEJgZGWOVJ6.s57aCGxzn5Zix5OXw4NO", // "password123"
+        fullName: "Ananya Desai",
+        email: "ananya.desai@example.com",
+        location: "Delhi, India",
+        skillsToTeach: ["Cooking", "Baking"],
+        skillsToLearn: ["Photography", "Video Editing"],
+      },
+    ];
+    
+    for (const user of initialUsers) {
+      try {
+        // Check if user already exists by username before creating
+        const existingUser = await this.getUserByUsername(user.username);
+        if (!existingUser) {
+          await this.createUser(user);
+          console.log(`Created initial user: ${user.username}`);
+        } else {
+          console.log(`Initial user ${user.username} already exists, skipping creation`);
+        }
+      } catch (error) {
+        console.error(`Error creating initial user ${user.username}:`, error);
+      }
+    }
+  }
+
+  async getNextId(): Promise<number> {
+    return this.currentId++;
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    try {
-      if (this.isConnected) {
-        const mongoUser = await UserModel.findOne({ id });
-        if (mongoUser) {
-          // Cache the user in memory storage
-          const user = mongoUserToAppUser(mongoUser);
-          this.memStorage['users'].set(id, user);
-          return user;
-        }
-      }
-    } catch (error) {
-      console.error('MongoDB getUser error:', error);
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot retrieve user data.');
     }
     
-    // Fall back to memory storage
-    return this.memStorage.getUser(id);
+    try {
+      const mongoUser = await UserModel.findOne({ id }).lean();
+      if (mongoUser) {
+        return mongoUserToAppUser(mongoUser);
+      }
+      return undefined;
+    } catch (error) {
+      console.error('MongoDB getUser error:', error);
+      throw error;
+    }
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    try {
-      if (this.isConnected) {
-        const mongoUser = await UserModel.findOne({ username });
-        if (mongoUser) {
-          // Cache the user in memory storage
-          const user = mongoUserToAppUser(mongoUser);
-          this.memStorage['users'].set(user.id, user);
-          return user;
-        }
-      }
-    } catch (error) {
-      console.error('MongoDB getUserByUsername error:', error);
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot retrieve user data.');
     }
     
-    // Fall back to memory storage
-    return this.memStorage.getUserByUsername(username);
+    try {
+      const mongoUser = await UserModel.findOne({ username }).lean();
+      if (mongoUser) {
+        return mongoUserToAppUser(mongoUser);
+      }
+      return undefined;
+    } catch (error) {
+      console.error('MongoDB getUserByUsername error:', error);
+      throw error;
+    }
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    // First create in memory storage to get an ID
-    const user = await this.memStorage.createUser(insertUser);
-    
-    try {
-      if (this.isConnected) {
-        // Ensure bio and imageUrl are explicitly included
-        const mongoUser = {
-          ...appUserToMongoUser(user),
-          // Explicitly set these fields to ensure they're included
-          bio: user.bio || '',
-          imageUrl: user.imageUrl || null
-        };
-        
-        console.log('Creating MongoDB user with data:', {
-          ...mongoUser,
-          password: '[REDACTED]'
-        });
-        
-        // Then save to MongoDB
-        await UserModel.create(mongoUser);
-        
-        // Verify the creation by fetching the user
-        const verifyUser = await UserModel.findOne({ id: user.id });
-        console.log('Verified MongoDB user after creation:', {
-          ...verifyUser?.toObject(),
-          password: '[REDACTED]'
-        });
-      }
-    } catch (error) {
-      console.error('MongoDB createUser error:', error);
-      // Continue with memory storage version
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot create user.');
     }
     
-    return user;
+    try {
+      const id = await this.getNextId();
+      
+      // Create user object with proper defaults
+      const user: User = { 
+        ...insertUser, 
+        id,
+        fullName: insertUser.fullName || null,
+        email: insertUser.email || null,
+        location: insertUser.location || null,
+        skillsToTeach: insertUser.skillsToTeach || [],
+        skillsToLearn: insertUser.skillsToLearn || [],
+        bio: insertUser.bio || '',
+        imageUrl: insertUser.imageUrl || null
+      };
+      
+      console.log('MongoDB - Creating user:', {
+        ...user,
+        password: '[REDACTED]'
+      });
+      
+      // Convert to MongoDB format and save
+      const mongoUser = appUserToMongoUser(user);
+      await UserModel.create(mongoUser);
+      
+      console.log(`User ${user.username} created successfully with ID ${id}`);
+      return user;
+    } catch (error) {
+      console.error('MongoDB createUser error:', error);
+      throw error;
+    }
   }
 
   async updateUser(id: number, userData: Partial<User>): Promise<User | undefined> {
-    // First update in memory storage. This also validates user existence and merges data.
-    const memUpdatedUser = await this.memStorage.updateUser(id, userData);
-
-    if (memUpdatedUser) {
-      try {
-        if (this.isConnected) {
-          // Construct the $set payload for MongoDB ONLY from the original userData (Partial<User>).
-          // This ensures we only update the fields that were intended to be changed.
-          const mongoUpdatePayload: any = {};
-          
-          // Iterate over the keys in userData (the partial update)
-          for (const key in userData) {
-            if (Object.prototype.hasOwnProperty.call(userData, key)) {
-              const K = key as keyof Partial<User>;
-
-              // Skip 'id' and 'password' from being directly set via this generic update
-              if (K === 'id' || K === 'password') {
-                continue;
-              }
-
-              // If the key is present in userData (the partial update), include it in the payload.
-              // This means userData[K] is not undefined.
-              if (userData[K] !== undefined) {
-                if (K === 'bio') {
-                  mongoUpdatePayload[K] = userData[K] || ''; // Ensure bio is a string, default to empty if null/undefined in userData
-                } else if (K === 'imageUrl') {
-                  mongoUpdatePayload[K] = userData[K];     // imageUrl can be string or null
-                } else {
-                  mongoUpdatePayload[K] = userData[K];     // For other fields
-                }
-              }
-              // If userData[K] is undefined, it means this partial update does not intend to change this field,
-              // so it's not added to mongoUpdatePayload. The existing value in DB remains.
-            }
-          }
-          
-          if (Object.keys(mongoUpdatePayload).length > 0) {
-            console.log('MongoDB update operation - document filter:', { id });
-            console.log('MongoDB update operation - $set payload:', mongoUpdatePayload);
-
-            const updateResult = await UserModel.updateOne(
-              { id },
-              { $set: mongoUpdatePayload }
-            );
-            
-            console.log('MongoDB update operation result:', updateResult);
-            
-            if (updateResult.matchedCount === 0) {
-              console.error('MongoDB update failed: No document matched the filter criteria for id:', id);
-            } else if (updateResult.modifiedCount === 0) {
-              console.warn('MongoDB update: Document matched but no changes were made for id:', id, '$set payload:', mongoUpdatePayload);
-            }
-            
-            // Verify the update by fetching the user (optional, for debugging)
-            const verifyUser = await UserModel.findOne({ id });
-            console.log('Verified MongoDB user after update:', {
-              id: verifyUser?.id,
-              username: verifyUser?.username,
-              bio: verifyUser?.bio,
-              imageUrl: verifyUser?.imageUrl,
-              // Log other relevant fields from verifyUser for comparison
-            });
-
-          } else {
-            console.log('MongoDB update operation - no fields to update in $set payload for id:', id);
-          }
-        }
-      } catch (error) {
-        console.error('MongoDB updateUser error for id:', id, error);
-        // memUpdatedUser (from memory) is still returned
-      }
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot update user.');
     }
     
-    return memUpdatedUser; // Return user from memory, which should reflect the update
+    try {
+      // Build update payload
+      const updatePayload: any = {};
+      
+      for (const key in userData) {
+        if (Object.prototype.hasOwnProperty.call(userData, key)) {
+          const K = key as keyof Partial<User>;
+          
+          // Skip 'id' from being updated
+          if (K === 'id') continue;
+          
+          if (userData[K] !== undefined) {
+            if (K === 'bio') {
+              updatePayload[K] = userData[K] || '';
+            } else {
+              updatePayload[K] = userData[K];
+            }
+          }
+        }
+      }
+      
+      if (Object.keys(updatePayload).length === 0) {
+        console.log('No fields to update');
+        return this.getUser(id);
+      }
+      
+      console.log('MongoDB update operation:', { id, updatePayload });
+      
+      const updateResult = await UserModel.updateOne(
+        { id },
+        { $set: updatePayload }
+      );
+      
+      console.log('MongoDB update result:', updateResult);
+      
+      if (updateResult.matchedCount === 0) {
+        console.error('No user found with id:', id);
+        return undefined;
+      }
+      
+      // Return the updated user
+      return this.getUser(id);
+    } catch (error) {
+      console.error('MongoDB updateUser error:', error);
+      throw error;
+    }
   }
 
   async deleteUser(id: number): Promise<boolean> {
-    // First delete from memory storage
-    const result = await this.memStorage.deleteUser(id);
-    
-    if (result) {
-      try {
-        if (this.isConnected) {
-          // Then delete from MongoDB
-          await UserModel.deleteOne({ id });
-        }
-      } catch (error) {
-        console.error('MongoDB deleteUser error:', error);
-        // Continue with memory storage result
-      }
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot delete user.');
     }
     
-    return result;
+    try {
+      const result = await UserModel.deleteOne({ id });
+      return result.deletedCount > 0;
+    } catch (error) {
+      console.error('MongoDB deleteUser error:', error);
+      throw error;
+    }
+  }
+
+  // MongoDB-specific methods for other data types
+  async saveMatch(match: any): Promise<any> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot save match.');
+    }
+    
+    try {
+      if (!match.id) {
+        match.id = await this.getNextId();
+      }
+      
+      const savedMatch = await MatchModel.findOneAndUpdate(
+        { id: match.id },
+        match,
+        { upsert: true, new: true }
+      );
+      console.log('Match saved to MongoDB:', match.id);
+      return savedMatch;
+    } catch (error) {
+      console.error('Error saving match to MongoDB:', error);
+      throw error;
+    }
+  }
+
+  async saveNotification(notification: any): Promise<void> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot save notification.');
+    }
+    
+    try {
+      if (!notification.id) {
+        notification.id = await this.getNextId();
+      }
+      
+      await NotificationModel.findOneAndUpdate(
+        { id: notification.id },
+        notification,
+        { upsert: true, new: true }
+      );
+      console.log('Notification saved to MongoDB:', notification.id);
+    } catch (error) {
+      console.error('Error saving notification to MongoDB:', error);
+      throw error;
+    }
+  }
+
+  async saveMessage(message: any): Promise<void> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot save message.');
+    }
+    
+    try {
+      if (!message.id) {
+        message.id = await this.getNextId();
+      }
+      
+      await ChatMessageModel.findOneAndUpdate(
+        { id: message.id },
+        message,
+        { upsert: true, new: true }
+      );
+      console.log('Message saved to MongoDB:', message.id);
+    } catch (error) {
+      console.error('Error saving message to MongoDB:', error);
+      throw error;
+    }
+  }
+
+  // Helper methods for querying matches, notifications, and messages
+  async getMatches(filter: any = {}): Promise<any[]> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot retrieve matches.');
+    }
+    
+    try {
+      const matches = await MatchModel.find(filter).lean();
+      return matches;
+    } catch (error) {
+      console.error('Error fetching matches:', error);
+      throw error;
+    }
+  }
+
+  async getMatch(id: number): Promise<any | undefined> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot retrieve match.');
+    }
+    
+    try {
+      const match = await MatchModel.findOne({ id }).lean();
+      return match;
+    } catch (error) {
+      console.error('Error fetching match:', error);
+      throw error;
+    }
+  }
+
+  async updateMatch(id: number, updateData: any): Promise<any | undefined> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot update match.');
+    }
+    
+    try {
+      const updatedMatch = await MatchModel.findOneAndUpdate(
+        { id },
+        { $set: { ...updateData, updatedAt: new Date() } },
+        { new: true }
+      ).lean();
+      return updatedMatch;
+    } catch (error) {
+      console.error('Error updating match:', error);
+      throw error;
+    }
+  }
+
+  async getNotifications(filter: any = {}): Promise<any[]> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot retrieve notifications.');
+    }
+    
+    try {
+      const notifications = await NotificationModel.find(filter).lean();
+      return notifications;
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      throw error;
+    }
+  }
+
+  async updateNotification(id: number, updateData: any): Promise<any | undefined> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot update notification.');
+    }
+    
+    try {
+      const updatedNotification = await NotificationModel.findOneAndUpdate(
+        { id },
+        { $set: { ...updateData, updatedAt: new Date() } },
+        { new: true }
+      ).lean();
+      return updatedNotification;
+    } catch (error) {
+      console.error('Error updating notification:', error);
+      throw error;
+    }
+  }
+
+  async getMessages(filter: any = {}): Promise<any[]> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot retrieve messages.');
+    }
+    
+    try {
+      const messages = await ChatMessageModel.find(filter).lean();
+      return messages;
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      throw error;
+    }
   }
 }
 
-// Create and export the MongoDB storage instance
+// Create and export the pure MongoDB storage instance
 export const storage = new MongoStorage();

@@ -88,7 +88,7 @@ export default function CommunityGuidelinesPage() {
                 </p>
                 
                 <p className="mt-6">
-                  Thank you for being part of the SkillSwap community!
+                  Thank you for being part of the SwapSkill community!
                 </p>
               </div>
             </div>

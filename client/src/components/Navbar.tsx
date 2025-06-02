@@ -1,10 +1,16 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { NotificationBadge } from "@/components/ui/notification-badge";
+import { useNotifications } from "@/hooks/use-notifications";
+import { useChat } from "@/hooks/use-chat";
+import { Bell, MessageCircle, Users } from "lucide-react";
 
 export default function Navbar() {
   const { user, logoutMutation } = useAuth();
   const [, setLocation] = useLocation();
+  const { counts: notificationCounts } = useNotifications();
+  const { counts: chatCounts } = useChat();
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
@@ -66,17 +72,39 @@ export default function Navbar() {
               Hello, {user.username}
             </span>
             <Link
-              href="/profile"
-              className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-full transition mr-2"
+              href="/match"
+              className="bg-blue-500 text-white font-medium py-2 px-4 rounded-full relative overflow-hidden transition-all duration-300 ease-in-out border border-blue-500 hover:text-blue-500 group mr-2"
             >
-              Profile
+              <span className="relative z-10 flex items-center">
+                <Users className="w-5 h-5 mr-2" />
+                Match
+              </span>
+              <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
             </Link>
-            <Link
-              href="/user-dashboard"
-              className="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-full transition mr-2"
-            >
-              Dashboard
-            </Link>
+            
+            <NotificationBadge count={chatCounts.unreadMessages} className="mr-2">
+              <Link
+                href="/chat"
+                className="bg-green-500 text-white font-medium py-3 px-3 rounded-full relative overflow-hidden transition-all duration-300 ease-in-out border border-green-500 hover:text-green-500 group flex items-center justify-center"
+              >
+                <span className="relative z-10">
+                  <MessageCircle className="w-5 h-5" />
+                </span>
+                <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
+              </Link>
+            </NotificationBadge>
+            
+            <NotificationBadge count={notificationCounts.total} className="mr-2">
+              <Link
+                href="/notifications"
+                className="bg-purple-500 text-white font-medium py-3 px-3 rounded-full relative overflow-hidden transition-all duration-300 ease-in-out border border-purple-500 hover:text-purple-500 group flex items-center justify-center"
+              >
+                <span className="relative z-10">
+                  <Bell className="w-5 h-5" />
+                </span>
+                <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
+              </Link>
+            </NotificationBadge>
             <button
               onClick={handleLogout}
               type="button"

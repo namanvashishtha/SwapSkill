@@ -18,13 +18,13 @@ export default function TeamPage() {
     {
       name: "Dinesh Rawat",
       role: "Lead Developer",
-      bio: "Dineshesponsible for SwapSkill's technical infrastructure. He has extensive experience in building scalable web applications and user-friendly interfaces.",
+      bio: "Dinesh is responsible for SwapSkill's technical infrastructure. He has extensive experience in building scalable web applications and user-friendly interfaces.",
       skills: ["Full-stack Development", "Architecture Design", "Performance Optimization"]
     },
     {
-      name: "Deepak",
+      name: "Yash Vashishtha",
       role: "Head of Community",
-      bio: "Deepak manages our growing community of users. She's focused on creating a safe, inclusive environment where everyone feels empowered to share their skills.",
+      bio: "Yash manages our growing community of users. He's focused on creating a safe, inclusive environment where everyone feels empowered to share their skills.",
       skills: ["Community Management", "Content Strategy", "User Engagement"]
     },
     {
