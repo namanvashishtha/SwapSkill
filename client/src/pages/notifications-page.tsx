@@ -6,17 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Bell, Check, X, User, Heart, MessageCircle, Loader2 } from "lucide-react";
+import { Bell, Check, X, User, Heart, MessageCircle, Loader2, Calendar } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface Notification {
   id: number;
   userId: number;
-  type: "match_request" | "match_accepted" | "message";
+  type: "match_request" | "match_accepted" | "message" | "session_proposal";
   title: string;
   message: string;
   isRead: boolean;
   relatedUserId?: number;
   relatedMatchId?: number;
+  relatedSessionId?: number;
   createdAt: string;
   relatedUser?: {
     id: number;
@@ -51,6 +53,7 @@ export default function NotificationsPage() {
   const [respondingToMatch, setRespondingToMatch] = useState<number | null>(null);
   const [deletingNotification, setDeletingNotification] = useState<number | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
+  const [, setLocation] = useLocation();
 
   const fetchUserNotifications = useCallback(async () => {
     if (!user) {
@@ -59,9 +62,11 @@ export default function NotificationsPage() {
     }
     setLoadingNotifications(true);
     try {
+      console.log("NotificationsPage: Fetching notifications...");
       const response = await fetch('/api/notifications', { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
+        console.log("NotificationsPage: Notifications fetched:", data);
         setNotifications(data);
       } else {
         console.error('Failed to fetch notifications:', response.statusText);
@@ -220,6 +225,27 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleNotificationClick = async (notification: Notification) => {
+    console.log("Notification clicked:", notification);
+    if (notification.type === 'session_proposal' && notification.relatedSessionId !== undefined && notification.relatedMatchId !== undefined) {
+      // Mark as read if not already read
+      if (!notification.isRead) {
+        await markAsRead(notification.id);
+      }
+      
+      // Navigate to chat with the specific match and session
+      const matchId = encodeURIComponent(notification.relatedMatchId);
+      const sessionId = encodeURIComponent(notification.relatedSessionId);
+      setLocation(`/chat?match=${matchId}&session=${sessionId}`);
+      return;
+    }
+    
+    // Mark as read if not already read
+    if (!notification.isRead) {
+      await markAsRead(notification.id);
+    }
+  };
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'match_request':
@@ -228,6 +254,8 @@ export default function NotificationsPage() {
         return <Check className="w-5 h-5 text-green-500" />;
       case 'message':
         return <MessageCircle className="w-5 h-5 text-blue-500" />;
+      case 'session_proposal':
+        return <Calendar className="w-5 h-5 text-purple-500" />;
       default:
         return <Bell className="w-5 h-5 text-gray-500" />;
     }
@@ -381,8 +409,8 @@ export default function NotificationsPage() {
                           {getNotificationIcon(notification.type)}
                         </div>
                         <div 
-                          className="flex-1 cursor-pointer"
-                          onClick={() => !notification.isRead && markAsRead(notification.id)}
+                          className={`flex-1 ${notification.type === 'session_proposal' ? 'cursor-pointer hover:bg-gray-50 rounded p-2 -m-2' : ''}`}
+                          onClick={() => handleNotificationClick(notification)}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <h3 className="font-semibold text-gray-800">{notification.title}</h3>
@@ -411,6 +439,11 @@ export default function NotificationsPage() {
                             </div>
                           </div>
                           <p className="text-gray-600 text-sm mb-2">{notification.message}</p>
+                          {notification.type === 'session_proposal' && (
+                            <p className="text-blue-600 text-xs font-medium">
+                              Click to view session details →
+                            </p>
+                          )}
                           <p className="text-gray-400 text-xs">
                             {new Date(notification.createdAt).toLocaleDateString()} at{' '}
                             {new Date(notification.createdAt).toLocaleTimeString()}

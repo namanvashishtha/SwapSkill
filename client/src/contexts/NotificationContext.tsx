@@ -1,6 +1,27 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
+
+interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  relatedUserId?: number;
+  relatedMatchId?: number;
+  relatedSessionId?: number;
+  createdAt: string;
+  relatedUser?: {
+    id: number;
+    username: string;
+    fullName: string | null;
+    imageUrl: string | null;
+  };
+}
 
 interface NotificationContextType {
+  notifications: Notification[];
+  fetchNotifications: () => Promise<void>;
   deleteNotification: (notificationId: number) => Promise<boolean>;
   clearAllNotifications: () => Promise<boolean>;
 }
@@ -8,6 +29,34 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await fetch('/api/notifications', {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data);
+      } else {
+        console.error('Failed to fetch notifications:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    console.log("NotificationContext: Fetching notifications...");
+    fetchNotifications();
+    const interval = setInterval(() => {
+      console.log("NotificationContext: Polling notifications...");
+      fetchNotifications();
+    }, 30000); // Poll every 30 seconds for better timeliness
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
   const deleteNotification = async (notificationId: number) => {
     try {
       const response = await fetch(`/api/notifications/${notificationId}`, {
@@ -16,12 +65,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
 
       if (response.ok) {
+        setNotifications(prev => prev.filter(n => n.id !== notificationId));
         return true;
       } else if (response.status === 404) {
-        // Notification not found - this is actually success (already deleted)
+        setNotifications(prev => prev.filter(n => n.id !== notificationId));
         return true;
       } else {
-        // Try to get error message from response
         let errorMessage = 'Unknown error';
         try {
           const errorData = await response.json();
@@ -46,12 +95,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
 
       if (response.ok) {
+        setNotifications([]);
         return true;
       } else if (response.status === 404) {
-        // No notifications found - this is actually success
+        setNotifications([]);
         return true;
       } else {
-        // Try to get error message from response
         let errorMessage = 'Unknown error';
         try {
           const errorData = await response.json();
@@ -70,6 +119,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider value={{
+      notifications,
+      fetchNotifications,
       deleteNotification,
       clearAllNotifications
     }}>

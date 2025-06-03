@@ -1975,6 +1975,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Unmatch (delete a match)
+  app.delete("/api/matches/:id", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const matchId = parseInt(req.params.id, 10);
+      
+      if (isNaN(matchId)) {
+        return res.status(400).json({ message: "Invalid match ID" });
+      }
+      
+      console.log(`Attempting to unmatch ${matchId} for user ${userId}`);
+      
+      // Get the match to verify user is part of it
+      const match = await storage.getMatch(matchId);
+      if (!match) {
+        return res.status(404).json({ message: "Match not found" });
+      }
+      
+      // Verify that the user is part of this match
+      if (match.fromUserId !== userId && match.toUserId !== userId) {
+        return res.status(403).json({ message: "You can only unmatch from your own matches" });
+      }
+      
+      // Only allow unmatching from accepted matches
+      if (match.status !== 'accepted') {
+        return res.status(400).json({ message: "You can only unmatch from accepted matches" });
+      }
+      
+      // Delete the match
+      const deleted = await storage.deleteMatch(matchId);
+      
+      if (!deleted) {
+        return res.status(500).json({ message: "Failed to unmatch. Please try again." });
+      }
+      
+      // Also delete any related chat messages
+      try {
+        await storage.deleteChatMessages({ matchId });
+        console.log(`Deleted chat messages for match ${matchId}`);
+      } catch (error) {
+        console.warn(`Failed to delete chat messages for match ${matchId}:`, error);
+        // Don't fail the unmatch if message deletion fails
+      }
+      
+      console.log(`Successfully unmatched ${matchId} for user ${userId}`);
+      res.json({ message: "Successfully unmatched" });
+    } catch (error) {
+      console.error("Error unmatching:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error unmatching" 
+      });
+    }
+  });
+
   // Get messages for a specific match
   app.get("/api/matches/:id/messages", async (req: express.Request, res: express.Response) => {
     try {
@@ -2329,6 +2387,271 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Error in test review endpoint",
         error: error instanceof Error ? error.stack : undefined
+      });
+    }
+  });
+
+  // Session management endpoints
+  
+  // Propose a new session
+  app.post("/api/matches/:matchId/sessions", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const matchId = parseInt(req.params.matchId, 10);
+      const { scheduledDate, duration, location, title, reminderSettings } = req.body;
+      
+      if (isNaN(matchId)) {
+        return res.status(400).json({ message: "Invalid match ID" });
+      }
+      
+      if (!scheduledDate || !duration) {
+        return res.status(400).json({ message: "Scheduled date and duration are required" });
+      }
+      
+      // Verify user is part of this match
+      const match = await storage.getMatch(matchId);
+      if (!match || (match.fromUserId !== userId && match.toUserId !== userId)) {
+        return res.status(403).json({ message: "Access denied to this match" });
+      }
+      
+      // Determine participant ID (the other user in the match)
+      const participantId = match.fromUserId === userId ? match.toUserId : match.fromUserId;
+      
+      const sessionData = {
+        matchId,
+        proposerId: userId,
+        participantId,
+        title: title || "Skill Exchange Session",
+        scheduledDate: new Date(scheduledDate),
+        duration: parseInt(duration, 10),
+        location: location || "",
+        status: "proposed",
+        proposedAt: new Date(),
+        reminderSettings: reminderSettings || {}
+      };
+      
+      const newSession = await storage.saveSession(sessionData);
+      
+      // Create notification for the other user
+      await storage.saveNotification({
+        userId: participantId,
+        type: 'session_proposal',
+        title: 'New Session Proposal',
+        message: `${req.user.fullName || req.user.username} proposed a session for ${new Date(scheduledDate).toLocaleDateString()}`,
+        isRead: false,
+        relatedUserId: userId,
+        relatedMatchId: matchId,
+        relatedSessionId: newSession.id
+      });
+      
+      res.status(201).json(newSession);
+    } catch (error) {
+      console.error("Error creating session:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error creating session" 
+      });
+    }
+  });
+  
+  // Get sessions for a match
+  app.get("/api/matches/:matchId/sessions", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const matchId = parseInt(req.params.matchId, 10);
+      
+      if (isNaN(matchId)) {
+        return res.status(400).json({ message: "Invalid match ID" });
+      }
+      
+      // Verify user is part of this match
+      const match = await storage.getMatch(matchId);
+      if (!match || (match.fromUserId !== userId && match.toUserId !== userId)) {
+        return res.status(403).json({ message: "Access denied to this match" });
+      }
+      
+      const sessions = await storage.getSessions({ matchId });
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching sessions" 
+      });
+    }
+  });
+  
+  // Respond to a session proposal (accept/reject)
+  app.post("/api/sessions/:sessionId/respond", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const sessionId = parseInt(req.params.sessionId, 10);
+      const { response, reminderMinutes } = req.body; // response: 'accepted' or 'rejected'
+      
+      if (isNaN(sessionId)) {
+        return res.status(400).json({ message: "Invalid session ID" });
+      }
+      
+      if (!response || !['accepted', 'rejected'].includes(response)) {
+        return res.status(400).json({ message: "Valid response (accepted/rejected) is required" });
+      }
+      
+      const session = await storage.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+      
+      // Verify user is the participant (not the proposer)
+      if (session.participantId !== userId) {
+        return res.status(403).json({ message: "Only the session participant can respond" });
+      }
+      
+      if (session.status !== 'proposed') {
+        return res.status(400).json({ message: "Session has already been responded to" });
+      }
+      
+      // Update session status and reminder settings
+      const updateData: any = {
+        status: response,
+        respondedAt: new Date()
+      };
+      
+      if (response === 'accepted' && reminderMinutes !== undefined) {
+        updateData.reminderSettings = {
+          ...session.reminderSettings,
+          participantReminder: parseInt(reminderMinutes, 10)
+        };
+      }
+      
+      const updatedSession = await storage.updateSession(sessionId, updateData);
+      
+      // Create notification for the proposer
+      await storage.saveNotification({
+        userId: session.proposerId,
+        type: 'message',
+        title: `Session ${response}`,
+        message: `${req.user.fullName || req.user.username} ${response} your session proposal`,
+        isRead: false,
+        relatedUserId: userId,
+        relatedMatchId: session.matchId
+      });
+      
+      res.json(updatedSession);
+    } catch (error) {
+      console.error("Error responding to session:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error responding to session" 
+      });
+    }
+  });
+  
+  // Get a single session by ID
+  app.get("/api/sessions/:sessionId", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const sessionId = parseInt(req.params.sessionId, 10);
+      
+      if (isNaN(sessionId)) {
+        return res.status(400).json({ message: "Invalid session ID" });
+      }
+      
+      const session = await storage.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+      
+      // Verify user is part of this session
+      if (session.proposerId !== userId && session.participantId !== userId) {
+        return res.status(403).json({ message: "Access denied to this session" });
+      }
+      
+      // Enhance session with match and user information
+      const match = await storage.getMatch(session.matchId);
+      const otherUserId = session.proposerId === userId ? session.participantId : session.proposerId;
+      const otherUser = await storage.getUser(otherUserId);
+      
+      const enhancedSession = {
+        ...session,
+        match,
+        otherUser: otherUser ? {
+          id: otherUser.id,
+          username: otherUser.username,
+          fullName: otherUser.fullName,
+          imageUrl: otherUser.imageUrl
+        } : null,
+        isProposer: session.proposerId === userId
+      };
+      
+      res.json(enhancedSession);
+    } catch (error) {
+      console.error("Error fetching session:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching session" 
+      });
+    }
+  });
+
+  // Get all sessions for a user (across all matches)
+  app.get("/api/sessions", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const { status } = req.query;
+      
+      let filter: any = {
+        $or: [
+          { proposerId: userId },
+          { participantId: userId }
+        ]
+      };
+      
+      if (status) {
+        filter.status = status;
+      }
+      
+      const sessions = await storage.getSessions(filter);
+      
+      // Enhance sessions with match and user information
+      const enhancedSessions = await Promise.all(sessions.map(async (session) => {
+        const match = await storage.getMatch(session.matchId);
+        const otherUserId = session.proposerId === userId ? session.participantId : session.proposerId;
+        const otherUser = await storage.getUser(otherUserId);
+        
+        return {
+          ...session,
+          match,
+          otherUser: otherUser ? {
+            id: otherUser.id,
+            username: otherUser.username,
+            fullName: otherUser.fullName,
+            imageUrl: otherUser.imageUrl
+          } : null,
+          isProposer: session.proposerId === userId
+        };
+      }));
+      
+      res.json(enhancedSessions);
+    } catch (error) {
+      console.error("Error fetching user sessions:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching sessions" 
       });
     }
   });

@@ -9,6 +9,7 @@ import {
   NotificationModel, 
   ChatMessageModel,
   ReviewModel,
+  SessionModel,
   mongoUserToAppUser, 
   appUserToMongoUser, 
   connectToMongoDB, 
@@ -43,11 +44,18 @@ export interface IStorage {
   getReviews(filter?: any): Promise<any[]>;
   // Additional methods for better organization
   deleteMessage(id: number): Promise<boolean>;
+  deleteChatMessages(filter?: any): Promise<boolean>;
   // Available skills methods
   getAvailableSkills(filter?: any): Promise<any[]>;
   getAvailableSkill(id: number): Promise<any | undefined>;
   createAvailableSkill(skill: any): Promise<any>;
   updateAvailableSkill(id: number, updateData: any): Promise<any | undefined>;
+  // Session methods
+  saveSession(session: any): Promise<any>;
+  getSessions(filter?: any): Promise<any[]>;
+  getSession(id: number): Promise<any | undefined>;
+  updateSession(id: number, updateData: any): Promise<any | undefined>;
+  deleteSession(id: number): Promise<boolean>;
   deleteAvailableSkill(id: number): Promise<boolean>;
 }
 
@@ -93,12 +101,13 @@ export class MongoStorage implements IStorage {
   private async initializeCurrentId(): Promise<void> {
     try {
       // Find the highest ID across all collections
-      const [maxUserId, maxMatchId, maxNotificationId, maxMessageId, maxReviewId] = await Promise.all([
+      const [maxUserId, maxMatchId, maxNotificationId, maxMessageId, maxReviewId, maxSessionId] = await Promise.all([
         UserModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean(),
         MatchModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean(),
         NotificationModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean(),
         ChatMessageModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean(),
-        ReviewModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean()
+        ReviewModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean(),
+        SessionModel.findOne({}, { id: 1 }).sort({ id: -1 }).lean()
       ]);
 
       const maxId = Math.max(
@@ -106,7 +115,8 @@ export class MongoStorage implements IStorage {
         maxMatchId?.id || 0,
         maxNotificationId?.id || 0,
         maxMessageId?.id || 0,
-        maxReviewId?.id || 0
+        maxReviewId?.id || 0,
+        maxSessionId?.id || 0
       );
 
       this.currentId = maxId + 1;
@@ -425,37 +435,7 @@ export class MongoStorage implements IStorage {
     }
   }
 
-  async updateMatch(id: number, updateData: any): Promise<any | undefined> {
-    if (!this.isConnected) {
-      throw new Error('MongoDB is not connected. Cannot update match.');
-    }
-    
-    try {
-      const updatedMatch = await MatchModel.findOneAndUpdate(
-        { id },
-        { $set: { ...updateData, updatedAt: new Date() } },
-        { new: true }
-      ).lean();
-      return updatedMatch;
-    } catch (error) {
-      console.error('Error updating match:', error);
-      throw error;
-    }
-  }
 
-  async deleteMatch(id: number): Promise<boolean> {
-    if (!this.isConnected) {
-      throw new Error('MongoDB is not connected. Cannot delete match.');
-    }
-    
-    try {
-      const result = await MatchModel.deleteOne({ id });
-      return result.deletedCount > 0;
-    } catch (error) {
-      console.error('Error deleting match:', error);
-      throw error;
-    }
-  }
 
   // Message-related methods
   async getMessages(filter: any = {}): Promise<any[]> {
@@ -537,6 +517,59 @@ export class MongoStorage implements IStorage {
       return match;
     } catch (error) {
       console.error('Error fetching match:', error);
+      throw error;
+    }
+  }
+
+  async updateMatch(id: number, updateData: any): Promise<any | undefined> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot update match.');
+    }
+    
+    try {
+      console.log(`updateMatch called for id: ${id} with data:`, updateData);
+      const updatedMatch = await MatchModel.findOneAndUpdate(
+        { id },
+        { $set: { ...updateData, updatedAt: new Date() } },
+        { new: true }
+      ).lean();
+      
+      console.log(`updateMatch result:`, updatedMatch ? 'SUCCESS' : 'NOT_FOUND');
+      return updatedMatch || undefined;
+    } catch (error) {
+      console.error('Error updating match:', error);
+      throw error;
+    }
+  }
+
+  async deleteMatch(id: number): Promise<boolean> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot delete match.');
+    }
+    
+    try {
+      console.log(`deleteMatch called for id: ${id}`);
+      const result = await MatchModel.deleteOne({ id });
+      console.log(`deleteMatch result: deleted ${result.deletedCount} documents`);
+      return result.deletedCount > 0;
+    } catch (error) {
+      console.error('Error deleting match:', error);
+      throw error;
+    }
+  }
+
+  async deleteChatMessages(filter: any = {}): Promise<boolean> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot delete chat messages.');
+    }
+    
+    try {
+      console.log(`deleteChatMessages called with filter:`, filter);
+      const result = await ChatMessageModel.deleteMany(filter);
+      console.log(`deleteChatMessages result: deleted ${result.deletedCount} messages`);
+      return result.deletedCount >= 0; // Return true even if 0 messages were deleted (no messages to delete)
+    } catch (error) {
+      console.error('Error deleting chat messages:', error);
       throw error;
     }
   }
@@ -712,6 +745,91 @@ export class MongoStorage implements IStorage {
       return result.modifiedCount > 0;
     } catch (error) {
       console.error('Error deleting available skill:', error);
+      throw error;
+    }
+  }
+
+  // Session methods
+  async saveSession(sessionData: any): Promise<any> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot save session.');
+    }
+    
+    try {
+      const sessionWithId = {
+        ...sessionData,
+        id: await this.getNextId(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const session = new SessionModel(sessionWithId);
+      const savedSession = await session.save();
+      console.log('Session saved successfully:', savedSession.id);
+      return savedSession.toObject();
+    } catch (error) {
+      console.error('Error saving session:', error);
+      throw error;
+    }
+  }
+
+  async getSessions(filter: any = {}): Promise<any[]> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot get sessions.');
+    }
+    
+    try {
+      const sessions = await SessionModel.find(filter).sort({ createdAt: -1 }).lean();
+      return sessions;
+    } catch (error) {
+      console.error('Error getting sessions:', error);
+      throw error;
+    }
+  }
+
+  async getSession(id: number): Promise<any | undefined> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot get session.');
+    }
+    
+    try {
+      const session = await SessionModel.findOne({ id }).lean();
+      return session || undefined;
+    } catch (error) {
+      console.error('Error getting session:', error);
+      throw error;
+    }
+  }
+
+  async updateSession(id: number, updateData: any): Promise<any | undefined> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot update session.');
+    }
+    
+    try {
+      const updatedSession = await SessionModel.findOneAndUpdate(
+        { id },
+        { ...updateData, updatedAt: new Date() },
+        { new: true }
+      ).lean();
+      
+      return updatedSession || undefined;
+    } catch (error) {
+      console.error('Error updating session:', error);
+      throw error;
+    }
+  }
+
+  async deleteSession(id: number): Promise<boolean> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot delete session.');
+    }
+    
+    try {
+      const result = await SessionModel.deleteOne({ id });
+      return result.deletedCount > 0;
+    } catch (error) {
+      console.error('Error deleting session:', error);
       throw error;
     }
   }

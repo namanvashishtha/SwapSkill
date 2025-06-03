@@ -199,12 +199,13 @@ const matchSchema = new mongoose.Schema({
 const notificationSchema = new mongoose.Schema({
   id: { type: Number, required: true, unique: true },
   userId: { type: Number, required: true },
-  type: { type: String, required: true, enum: ['match_request', 'match_accepted', 'message'] },
+  type: { type: String, required: true, enum: ['match_request', 'match_accepted', 'message', 'session_proposal'] },
   title: { type: String, required: true },
   message: { type: String, required: true },
   isRead: { type: Boolean, default: false },
   relatedUserId: { type: Number },
   relatedMatchId: { type: Number },
+  relatedSessionId: { type: Number }, // Added relatedSessionId field
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -229,6 +230,32 @@ const reviewSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Session schema for scheduled meetups
+const sessionSchema = new mongoose.Schema({
+  id: { type: Number, required: true, unique: true },
+  matchId: { type: Number, required: true },
+  proposerId: { type: Number, required: true },
+  participantId: { type: Number, required: true },
+  title: { type: String },
+  scheduledDate: { type: Date, required: true },
+  duration: { type: Number, required: true }, // duration in minutes
+  location: { type: String },
+  status: { 
+    type: String, 
+    required: true, 
+    enum: ['proposed', 'accepted', 'rejected', 'completed', 'cancelled'], 
+    default: 'proposed' 
+  },
+  proposedAt: { type: Date, default: Date.now },
+  respondedAt: { type: Date },
+  reminderSettings: {
+    proposerReminder: { type: Number }, // minutes before session
+    participantReminder: { type: Number } // minutes before session
+  },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 // Create models
 export const UserModel = mongoose.model('User', userSchema);
 export const SkillModel = mongoose.model('Skill', skillSchema);
@@ -237,6 +264,7 @@ export const MatchModel = mongoose.model('Match', matchSchema);
 export const NotificationModel = mongoose.model('Notification', notificationSchema);
 export const ChatMessageModel = mongoose.model('ChatMessage', chatMessageSchema);
 export const ReviewModel = mongoose.model('Review', reviewSchema);
+export const SessionModel = mongoose.model('Session', sessionSchema);
 
 // Helper functions
 export function mongoUserToAppUser(mongoUser: any): User & { bio?: string; imageUrl?: string | null } {

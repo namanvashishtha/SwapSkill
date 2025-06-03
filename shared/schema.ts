@@ -26,19 +26,6 @@ export const skillSchema = z.object({
 
 export const insertSkillSchema = skillSchema.omit({ id: true });
 
-// Available skills schema for the skills collection
-export const availableSkillSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  category: z.string(),
-  description: z.string().nullable(),
-  isActive: z.boolean().default(true),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
-
-export const insertAvailableSkillSchema = availableSkillSchema.omit({ id: true, createdAt: true, updatedAt: true });
-
 // Match schema for skill matching system
 export const matchSchema = z.object({
   id: z.number(),
@@ -55,12 +42,13 @@ export const insertMatchSchema = matchSchema.omit({ id: true, createdAt: true, u
 export const notificationSchema = z.object({
   id: z.number(),
   userId: z.number(),
-  type: z.enum(["match_request", "match_accepted", "message"]),
+  type: z.enum(["match_request", "match_accepted", "message", "session_proposal"]),
   title: z.string(),
   message: z.string(),
   isRead: z.boolean(),
   relatedUserId: z.number().optional(),
   relatedMatchId: z.number().optional(),
+  relatedSessionId: z.number().optional(),
   createdAt: z.date(),
 });
 
@@ -90,6 +78,29 @@ export const reviewSchema = z.object({
 });
 
 export const insertReviewSchema = reviewSchema.omit({ id: true, createdAt: true });
+
+// Session schema for scheduled meetups
+export const sessionSchema = z.object({
+  id: z.number(),
+  matchId: z.number(),
+  proposerId: z.number(),
+  participantId: z.number(),
+  title: z.string().optional(),
+  scheduledDate: z.date(),
+  duration: z.number(), // duration in minutes
+  location: z.string().optional(),
+  status: z.enum(["proposed", "accepted", "rejected", "completed", "cancelled"]),
+  proposedAt: z.date(),
+  respondedAt: z.date().optional(),
+  reminderSettings: z.object({
+    proposerReminder: z.number().optional(), // minutes before session
+    participantReminder: z.number().optional(), // minutes before session
+  }).optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const insertSessionSchema = sessionSchema.omit({ id: true, createdAt: true, updatedAt: true });
 
 // For compatibility with existing code, we'll keep a users object
 export const users = {
@@ -121,32 +132,18 @@ export const skills = {
   $inferSelect: {} as Skill,
 };
 
-export const availableSkills = {
-  name: "available_skills",
-  fields: {
-    id: "id",
-    name: "name",
-    category: "category",
-    description: "description",
-    isActive: "is_active",
-    createdAt: "created_at",
-    updatedAt: "updated_at",
-  },
-  $inferSelect: {} as AvailableSkill,
-};
-
 // Export types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertSkill = z.infer<typeof insertSkillSchema>;
-export type InsertAvailableSkill = z.infer<typeof insertAvailableSkillSchema>;
 export type InsertMatch = z.infer<typeof insertMatchSchema>;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type InsertReview = z.infer<typeof insertReviewSchema>;
+export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type User = z.infer<typeof userSchema>;
 export type Skill = z.infer<typeof skillSchema>;
-export type AvailableSkill = z.infer<typeof availableSkillSchema>;
 export type Match = z.infer<typeof matchSchema>;
 export type Notification = z.infer<typeof notificationSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type Review = z.infer<typeof reviewSchema>;
+export type Session = z.infer<typeof sessionSchema>;
