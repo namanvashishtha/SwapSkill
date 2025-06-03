@@ -26,6 +26,19 @@ export const skillSchema = z.object({
 
 export const insertSkillSchema = skillSchema.omit({ id: true });
 
+// Available skills schema for the skills collection
+export const availableSkillSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  category: z.string(),
+  description: z.string().nullable(),
+  isActive: z.boolean().default(true),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const insertAvailableSkillSchema = availableSkillSchema.omit({ id: true, createdAt: true, updatedAt: true });
+
 // Match schema for skill matching system
 export const matchSchema = z.object({
   id: z.number(),
@@ -108,15 +121,31 @@ export const skills = {
   $inferSelect: {} as Skill,
 };
 
+export const availableSkills = {
+  name: "available_skills",
+  fields: {
+    id: "id",
+    name: "name",
+    category: "category",
+    description: "description",
+    isActive: "is_active",
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+  },
+  $inferSelect: {} as AvailableSkill,
+};
+
 // Export types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertSkill = z.infer<typeof insertSkillSchema>;
+export type InsertAvailableSkill = z.infer<typeof insertAvailableSkillSchema>;
 export type InsertMatch = z.infer<typeof insertMatchSchema>;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type User = z.infer<typeof userSchema>;
 export type Skill = z.infer<typeof skillSchema>;
+export type AvailableSkill = z.infer<typeof availableSkillSchema>;
 export type Match = z.infer<typeof matchSchema>;
 export type Notification = z.infer<typeof notificationSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;

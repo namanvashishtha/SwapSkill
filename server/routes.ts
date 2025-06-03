@@ -4,11 +4,22 @@ import { setupAuth } from "./auth.js";
 import { storage } from "./storage.js";
 import { setupStatusRoutes } from "./routes/status.js";
 import { setupAdminRoutes } from "./routes/admin.js";
-import { updateUserBioAndImage, UserModel, mongoUserToAppUser } from "./db/mongodb.js";
+import { 
+  updateUserBioAndImage, 
+  UserModel, 
+  SkillModel, 
+  MatchModel, 
+  NotificationModel, 
+  ChatMessageModel, 
+  ReviewModel, 
+  mongoUserToAppUser 
+} from "./db/mongodb.js";
 import multer from "multer";
 import path from "path";
 import * as fs from "fs";
 import { User } from "../shared/schema.js";
+import { autoCreateSkills, getOrCreateSkillsWithCategories, categorizeSkillAdvanced } from "./services/skillCategorization.js";
+import { categorizeSkillWithAI, categorizeSkillsWithAI, getSkillCategoryStats } from "./services/aiCategorization.js";
 
 // Get __dirname equivalent in a way that works with both ESM and CommonJS
 const __dirname = path.resolve();
@@ -205,22 +216,203 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Setup skills API
-  app.get("/api/skills", async (req: express.Request, res: express.Response) => {
-    const skills = [
-      { id: 1, name: "Coding", icon: "code", category: "Technology" },
-      { id: 2, name: "Music", icon: "music_note", category: "Arts" },
-      { id: 3, name: "Cooking", icon: "restaurant", category: "Lifestyle" },
-      { id: 4, name: "Photography", icon: "camera_alt", category: "Arts" },
-      { id: 5, name: "Design", icon: "palette", category: "Arts" },
-      { id: 6, name: "Language", icon: "translate", category: "Education" },
-      { id: 7, name: "Crafts", icon: "build", category: "Hobbies" },
-      { id: 8, name: "Finance", icon: "account_balance", category: "Business" },
-      { id: 9, name: "Art", icon: "brush", category: "Arts" },
-      { id: 10, name: "Mentoring", icon: "people", category: "Professional" },
-    ];
-    
-    res.json(skills);
+  // Available skills API
+  app.get("/api/available-skills", async (req: express.Request, res: express.Response) => {
+    try {
+      const skills = await storage.getAvailableSkills();
+      res.json(skills);
+    } catch (error) {
+      console.error("Error fetching available skills:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching available skills" 
+      });
+    }
+  });
+
+  // Get available skills grouped by category
+  app.get("/api/available-skills/grouped", async (req: express.Request, res: express.Response) => {
+    try {
+      const skills = await storage.getAvailableSkills();
+      
+      // Group skills by category
+      const groupedSkills = skills.reduce((acc: any, skill: any) => {
+        if (!acc[skill.category]) {
+          acc[skill.category] = [];
+        }
+        acc[skill.category].push(skill);
+        return acc;
+      }, {});
+      
+      res.json(groupedSkills);
+    } catch (error) {
+      console.error("Error fetching grouped available skills:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching available skills" 
+      });
+    }
+  });
+
+  // Create a new available skill
+  app.post("/api/available-skills", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in to add skills" });
+      }
+
+      const { name, category, description } = req.body;
+      
+      if (!name || !category) {
+        return res.status(400).json({ message: "Skill name and category are required" });
+      }
+
+      const newSkill = await storage.createAvailableSkill({
+        name: name.trim(),
+        category: category.trim(),
+        description: description?.trim() || null
+      });
+
+      res.status(201).json(newSkill);
+    } catch (error) {
+      console.error("Error creating available skill:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error creating skill" 
+      });
+    }
+  });
+
+  // Search available skills
+  app.get("/api/available-skills/search", async (req: express.Request, res: express.Response) => {
+    try {
+      const { q } = req.query;
+      
+      if (!q || typeof q !== 'string') {
+        return res.status(400).json({ message: "Search query is required" });
+      }
+
+      const skills = await storage.getAvailableSkills({
+        name: { $regex: new RegExp(q, 'i') }
+      });
+      
+      res.json(skills);
+    } catch (error) {
+      console.error("Error searching available skills:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error searching skills" 
+      });
+    }
+  });
+
+  // AI-powered skill categorization endpoint
+  app.post("/api/skills/categorize", async (req: express.Request, res: express.Response) => {
+    try {
+      const { skillName } = req.body;
+      
+      if (!skillName || typeof skillName !== 'string') {
+        return res.status(400).json({ message: "Skill name is required" });
+      }
+
+      const prediction = categorizeSkillWithAI(skillName.trim());
+      
+      res.json({ 
+        skillName: skillName.trim(),
+        category: prediction.category,
+        confidence: prediction.confidence,
+        reasoning: prediction.reasoning
+      });
+    } catch (error) {
+      console.error("Error categorizing skill:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error categorizing skill" 
+      });
+    }
+  });
+
+  // Advanced batch categorization with detailed analysis
+  app.post("/api/skills/categorize-batch", async (req: express.Request, res: express.Response) => {
+    try {
+      const { skills } = req.body;
+      
+      if (!Array.isArray(skills)) {
+        return res.status(400).json({ message: "Skills must be an array" });
+      }
+
+      const predictions = categorizeSkillsWithAI(skills);
+      const stats = getSkillCategoryStats(skills);
+      
+      res.json({ 
+        predictions: predictions,
+        statistics: stats,
+        totalSkills: skills.length
+      });
+    } catch (error) {
+      console.error("Error batch categorizing skills:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error categorizing skills" 
+      });
+    }
+  });
+
+  // Batch skill categorization and auto-creation
+  app.post("/api/skills/batch-process", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+
+      const { skills } = req.body;
+      
+      if (!Array.isArray(skills)) {
+        return res.status(400).json({ message: "Skills must be an array" });
+      }
+
+      const processedSkills = await getOrCreateSkillsWithCategories(skills);
+      
+      res.json({ 
+        processedSkills: processedSkills,
+        message: `Processed ${processedSkills.length} skills`
+      });
+    } catch (error) {
+      console.error("Error batch processing skills:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error processing skills" 
+      });
+    }
+  });
+
+  // Get skill suggestions based on partial input
+  app.get("/api/skills/suggestions", async (req: express.Request, res: express.Response) => {
+    try {
+      const { q, category } = req.query;
+      
+      if (!q || typeof q !== 'string') {
+        return res.status(400).json({ message: "Search query is required" });
+      }
+
+      const filter: any = {
+        name: { $regex: new RegExp(q, 'i') },
+        isActive: true
+      };
+
+      if (category && typeof category === 'string') {
+        filter.category = category;
+      }
+
+      const skills = await storage.getAvailableSkills(filter);
+      
+      // Limit to top 10 suggestions
+      const suggestions = skills.slice(0, 10).map(skill => ({
+        name: skill.name,
+        category: skill.category,
+        description: skill.description
+      }));
+      
+      res.json(suggestions);
+    } catch (error) {
+      console.error("Error getting skill suggestions:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error getting suggestions" 
+      });
+    }
   });
   
   // User profile API
@@ -248,6 +440,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...currentUser,
         password: "[REDACTED]"
       });
+      
+      // Auto-create new skills in the available skills collection
+      const allSkills = [...(skillsToTeach || []), ...(skillsToLearn || [])];
+      if (allSkills.length > 0) {
+        try {
+          await autoCreateSkills(allSkills);
+          console.log("Auto-created skills completed");
+        } catch (error) {
+          console.error("Error auto-creating skills:", error);
+          // Continue with profile update even if skill creation fails
+        }
+      }
       
       // Update through storage layer. This will handle both MemStorage and MongoDB.
       // The imageUrl from currentUser is passed to preserve it if not otherwise specified by this PUT.
@@ -360,6 +564,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Profile update error:", error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Something went wrong while saving your profile" 
+      });
+    }
+  });
+
+  // Delete user account API
+  app.delete("/api/user/delete-account", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in to delete your account" });
+      }
+      
+      const userId = (req.user as User).id;
+      console.log(`DELETE /api/user/delete-account - Deleting account for user ${userId}`);
+      
+      // Delete user from storage (this will handle both MemStorage and MongoDB)
+      const deleted = await storage.deleteUser(userId);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Also delete related data from MongoDB if using MongoDB
+      try {
+        // Delete user's skills
+        await SkillModel.deleteMany({ userId: userId });
+        console.log(`Deleted skills for user ${userId}`);
+        
+        // Delete user's matches
+        await MatchModel.deleteMany({ 
+          $or: [{ fromUserId: userId }, { toUserId: userId }] 
+        });
+        console.log(`Deleted matches for user ${userId}`);
+        
+        // Delete user's notifications
+        await NotificationModel.deleteMany({ userId: userId });
+        console.log(`Deleted notifications for user ${userId}`);
+        
+        // Delete user's chat messages
+        const userMatches = await MatchModel.find({ 
+          $or: [{ fromUserId: userId }, { toUserId: userId }] 
+        });
+        const matchIds = userMatches.map(match => match.id);
+        if (matchIds.length > 0) {
+          await ChatMessageModel.deleteMany({ matchId: { $in: matchIds } });
+          console.log(`Deleted chat messages for user ${userId}`);
+        }
+        
+        // Delete user's reviews (both given and received)
+        await ReviewModel.deleteMany({ 
+          $or: [{ reviewerId: userId }, { revieweeId: userId }] 
+        });
+        console.log(`Deleted reviews for user ${userId}`);
+        
+        // Finally delete the user from MongoDB
+        await UserModel.deleteOne({ id: userId });
+        console.log(`Deleted user ${userId} from MongoDB`);
+        
+      } catch (mongoError) {
+        console.error("Error deleting related data from MongoDB:", mongoError);
+        // Continue even if MongoDB cleanup fails
+      }
+      
+      // Log out the user
+      req.logout((err) => {
+        if (err) {
+          console.error("Error logging out user after account deletion:", err);
+        }
+      });
+      
+      console.log(`Successfully deleted account for user ${userId}`);
+      res.status(200).json({ message: "Account deleted successfully" });
+      
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to delete account" 
       });
     }
   });

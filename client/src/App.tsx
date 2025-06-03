@@ -11,6 +11,7 @@ import CommunityGuidelinesPage from "@/pages/community-guidelines-page";
 import SafetyTipsPage from "@/pages/safety-tips-page";
 import SuccessStoriesPage from "@/pages/success-stories-page";
 import SkillCategoriesPage from "@/pages/skill-categories-page";
+import SkillsPage from "@/pages/skills-page";
 import SupportPage from "@/pages/support-page";
 import PressPage from "@/pages/press-page";
 import TermsPage from "@/pages/terms-page";
@@ -26,6 +27,7 @@ import MatchPage from "@/pages/match-page";
 import NotificationsPage from "./pages/notifications-page";
 import ChatPage from "@/pages/chat-page";
 import UserProfileView from "@/pages/user-profile-view";
+import SettingsPage from "@/pages/settings-page";
 import ScrollToTop from "@/components/ScrollToTop";
 import DynamicScrollbar from "@/components/DynamicScrollbar";
 import { Loader2 } from "lucide-react";
@@ -95,6 +97,7 @@ function Router() {
       <Route path="/skill-categories">
         <SkillCategoriesPage />
       </Route>
+      <ProtectedRoute path="/skills" component={SkillsPage} />
       <Route path="/support">
         <SupportPage />
       </Route>
@@ -117,6 +120,7 @@ function Router() {
       <ProtectedRoute path="/match" component={MatchPage} />
       <ProtectedRoute path="/notifications" component={NotificationsPage} />
       <ProtectedRoute path="/chat" component={ChatPage} />
+      <ProtectedRoute path="/settings" component={SettingsPage} />
       <Route>
         <NotFound />
       </Route>

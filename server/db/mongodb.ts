@@ -109,6 +109,14 @@ export async function connectToMongoDB() {
       console.error('Error fixing user documents:', fixError);
       // Continue even if fixing fails
     }
+
+    // Initialize available skills
+    try {
+      await initializeAvailableSkills();
+    } catch (skillsError) {
+      console.error('Error initializing available skills:', skillsError);
+      // Continue even if skills initialization fails
+    }
     
     return true;
   } catch (error) {
@@ -166,6 +174,17 @@ const skillSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Available skills schema for the skills collection
+const availableSkillSchema = new mongoose.Schema({
+  id: { type: Number, required: true, unique: true },
+  name: { type: String, required: true, unique: true },
+  category: { type: String, required: true },
+  description: { type: String },
+  isActive: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 // Match schema for skill matching system
 const matchSchema = new mongoose.Schema({
   id: { type: Number, required: true, unique: true },
@@ -213,6 +232,7 @@ const reviewSchema = new mongoose.Schema({
 // Create models
 export const UserModel = mongoose.model('User', userSchema);
 export const SkillModel = mongoose.model('Skill', skillSchema);
+export const AvailableSkillModel = mongoose.model('AvailableSkill', availableSkillSchema);
 export const MatchModel = mongoose.model('Match', matchSchema);
 export const NotificationModel = mongoose.model('Notification', notificationSchema);
 export const ChatMessageModel = mongoose.model('ChatMessage', chatMessageSchema);
@@ -300,5 +320,92 @@ export async function updateUserBioAndImage(userId: number, bio: string, imageUr
   } catch (error) {
     console.error('Direct MongoDB update error:', error);
     return false;
+  }
+}
+
+// Initialize available skills with predefined categories
+export async function initializeAvailableSkills(): Promise<void> {
+  try {
+    const existingSkillsCount = await AvailableSkillModel.countDocuments();
+    
+    if (existingSkillsCount > 0) {
+      console.log(`Available skills already initialized (${existingSkillsCount} skills found)`);
+      return;
+    }
+
+    console.log('Initializing available skills...');
+
+    const categories = [
+      {
+        name: "Technology",
+        skills: ["Web Development", "Mobile App Development", "Data Science", "Machine Learning", "Cybersecurity", "Cloud Computing", "Blockchain", "Game Development"]
+      },
+      {
+        name: "Creative Arts",
+        skills: ["Graphic Design", "Illustration", "Animation", "UI/UX Design", "Digital Painting", "Typography", "Logo Design", "Brand Identity"]
+      },
+      {
+        name: "Music",
+        skills: ["Guitar", "Piano", "Singing", "Music Production", "DJ Skills", "Songwriting", "Music Theory", "Drums"]
+      },
+      {
+        name: "Academic",
+        skills: ["Mathematics", "Physics", "Chemistry", "Biology", "History", "Literature", "Philosophy", "Economics"]
+      },
+      {
+        name: "Photography",
+        skills: ["Portrait Photography", "Landscape Photography", "Product Photography", "Photo Editing", "Lighting Techniques", "Composition", "Street Photography"]
+      },
+      {
+        name: "Fitness",
+        skills: ["Yoga", "Strength Training", "Cardio Workouts", "Pilates", "Martial Arts", "Nutrition Planning", "Personal Training"]
+      },
+      {
+        name: "Languages",
+        skills: ["English", "Spanish", "Mandarin", "French", "German", "Japanese", "Arabic", "Russian", "Sign Language"]
+      },
+      {
+        name: "Business",
+        skills: ["Marketing", "Accounting", "Project Management", "Public Speaking", "Sales", "Entrepreneurship", "Business Strategy", "Leadership"]
+      },
+      {
+        name: "Culinary",
+        skills: ["Cooking", "Baking", "Pastry Making", "Meal Prep", "Wine Pairing", "Barista Skills", "Food Photography", "Nutrition"]
+      },
+      {
+        name: "Gardening",
+        skills: ["Plant Care", "Vegetable Gardening", "Landscape Design", "Composting", "Hydroponics", "Bonsai", "Herb Gardening"]
+      },
+      {
+        name: "DIY & Crafts",
+        skills: ["Woodworking", "Knitting", "Sewing", "Jewelry Making", "Pottery", "Home Repair", "Upcycling", "Candle Making"]
+      },
+      {
+        name: "Wellness",
+        skills: ["Meditation", "Mindfulness", "Aromatherapy", "Massage Techniques", "Stress Management", "Sleep Improvement", "Journaling"]
+      }
+    ];
+
+    let skillId = 1;
+    const skillsToInsert = [];
+
+    for (const category of categories) {
+      for (const skillName of category.skills) {
+        skillsToInsert.push({
+          id: skillId++,
+          name: skillName,
+          category: category.name,
+          description: null,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
+    }
+
+    await AvailableSkillModel.insertMany(skillsToInsert);
+    console.log(`Initialized ${skillsToInsert.length} available skills`);
+  } catch (error) {
+    console.error('Error initializing available skills:', error);
   }
 } 

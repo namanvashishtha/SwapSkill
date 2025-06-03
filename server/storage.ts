@@ -4,6 +4,7 @@ import MongoStore from "connect-mongo";
 import { 
   UserModel, 
   SkillModel, 
+  AvailableSkillModel,
   MatchModel, 
   NotificationModel, 
   ChatMessageModel,
@@ -42,6 +43,12 @@ export interface IStorage {
   getReviews(filter?: any): Promise<any[]>;
   // Additional methods for better organization
   deleteMessage(id: number): Promise<boolean>;
+  // Available skills methods
+  getAvailableSkills(filter?: any): Promise<any[]>;
+  getAvailableSkill(id: number): Promise<any | undefined>;
+  createAvailableSkill(skill: any): Promise<any>;
+  updateAvailableSkill(id: number, updateData: any): Promise<any | undefined>;
+  deleteAvailableSkill(id: number): Promise<boolean>;
 }
 
 export class MongoStorage implements IStorage {
@@ -602,6 +609,109 @@ export class MongoStorage implements IStorage {
       return reviews;
     } catch (error) {
       console.error('Error fetching reviews:', error);
+      throw error;
+    }
+  }
+
+  // Available skills methods
+  async getAvailableSkills(filter: any = {}): Promise<any[]> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot retrieve available skills.');
+    }
+    
+    try {
+      const skills = await AvailableSkillModel.find({ isActive: true, ...filter }).lean();
+      return skills;
+    } catch (error) {
+      console.error('Error fetching available skills:', error);
+      throw error;
+    }
+  }
+
+  async getAvailableSkill(id: number): Promise<any | undefined> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot retrieve available skill.');
+    }
+    
+    try {
+      const skill = await AvailableSkillModel.findOne({ id, isActive: true }).lean();
+      return skill || undefined;
+    } catch (error) {
+      console.error('Error fetching available skill:', error);
+      throw error;
+    }
+  }
+
+  async createAvailableSkill(skillData: any): Promise<any> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot create available skill.');
+    }
+    
+    try {
+      // Check if skill already exists
+      const existingSkill = await AvailableSkillModel.findOne({ 
+        name: { $regex: new RegExp(`^${skillData.name}$`, 'i') } 
+      }).lean();
+      
+      if (existingSkill) {
+        return existingSkill;
+      }
+
+      // Get next ID
+      const nextId = await this.getNextId();
+      
+      const newSkill = new AvailableSkillModel({
+        id: nextId,
+        name: skillData.name,
+        category: skillData.category || 'Other',
+        description: skillData.description || null,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      
+      const savedSkill = await newSkill.save();
+      return savedSkill.toObject();
+    } catch (error) {
+      console.error('Error creating available skill:', error);
+      throw error;
+    }
+  }
+
+  async updateAvailableSkill(id: number, updateData: any): Promise<any | undefined> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot update available skill.');
+    }
+    
+    try {
+      const updatedSkill = await AvailableSkillModel.findOneAndUpdate(
+        { id },
+        { ...updateData, updatedAt: new Date() },
+        { new: true }
+      ).lean();
+      
+      return updatedSkill || undefined;
+    } catch (error) {
+      console.error('Error updating available skill:', error);
+      throw error;
+    }
+  }
+
+  async deleteAvailableSkill(id: number): Promise<boolean> {
+    if (!this.isConnected) {
+      throw new Error('MongoDB is not connected. Cannot delete available skill.');
+    }
+    
+    try {
+      // Soft delete by setting isActive to false
+      const result = await AvailableSkillModel.updateOne(
+        { id },
+        { isActive: false, updatedAt: new Date() }
+      );
+      
+      return result.modifiedCount > 0;
+    } catch (error) {
+      console.error('Error deleting available skill:', error);
       throw error;
     }
   }

@@ -345,7 +345,7 @@ export default function UserDashboard() {
                 Profile
               </motion.span>
             </Link>
-            <Link href="/overview" className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 rounded-lg">
+            {/* <Link href="/overview" className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 rounded-lg">
               <Home className="w-5 h-5 flex-shrink-0" />
               <motion.span
                 initial={{ opacity: 0, width: 0 }}
@@ -355,7 +355,7 @@ export default function UserDashboard() {
               >
                 Overview
               </motion.span>
-            </Link>
+            </Link> */}
             <Link href="/sessions" className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 rounded-lg">
               <Calendar className="w-5 h-5 flex-shrink-0" />
               <motion.span
