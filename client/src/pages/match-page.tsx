@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Heart, X, MapPin, User, BookOpen, GraduationCap, Loader2 } from "lucide-react";
+import { UserRating } from "@/components/ui/review";
+import { useLocation } from "wouter";
 
 interface UserProfile {
   id: number;
@@ -29,6 +31,7 @@ interface MatchRequest {
 export default function MatchPage() {
   const { user, isLoading } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [matchRequests, setMatchRequests] = useState<MatchRequest[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -221,7 +224,10 @@ export default function MatchPage() {
                           </div>
                         )}
                       </div>
-                      <CardTitle className="text-xl font-semibold text-gray-800">
+                      <CardTitle 
+                        className="text-xl font-semibold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors"
+                        onClick={() => navigate(`/user/${otherUser.id}`)}
+                      >
                         {otherUser.fullName || otherUser.username}
                       </CardTitle>
                       {otherUser.location && (
@@ -230,6 +236,9 @@ export default function MatchPage() {
                           {otherUser.location}
                         </div>
                       )}
+                      <div className="flex justify-center">
+                        <UserRating userId={otherUser.id} size="sm" />
+                      </div>
                     </CardHeader>
 
                     <CardContent className="space-y-4">

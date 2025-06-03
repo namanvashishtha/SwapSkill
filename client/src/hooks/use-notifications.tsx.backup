@@ -1,0 +1,181 @@
+import { useState, useEffect } from "react";
+import { useAuth } from "./use-auth";
+
+interface NotificationCounts {
+  unreadNotifications: number;
+  pendingMatchRequests: number;
+  total: number;
+}
+
+export function useNotifications() {
+  const { user } = useAuth();
+  const [counts, setCounts] = useState<NotificationCounts>({
+    unreadNotifications: 0,
+    pendingMatchRequests: 0,
+    total: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchNotificationCounts = async () => {
+    if (!user) {
+      setCounts({ unreadNotifications: 0, pendingMatchRequests: 0, total: 0 });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Fetch unread notifications count
+      const notificationsResponse = await fetch('/api/notifications/count', {
+        credentials: 'include'
+      });
+      
+      // Fetch pending match requests count
+      const matchRequestsResponse = await fetch('/api/matches/pending/count', {
+        credentials: 'include'
+      });
+
+      let unreadNotifications = 0;
+      let pendingMatchRequests = 0;
+
+      if (notificationsResponse.ok) {
+        const notificationData = await notificationsResponse.json();
+        unreadNotifications = Math.max(0, notificationData.count || 0);
+      } else {
+        console.warn('Failed to fetch notification count:', notificationsResponse.status);
+      }
+
+      if (matchRequestsResponse.ok) {
+        const matchData = await matchRequestsResponse.json();
+        pendingMatchRequests = Math.max(0, matchData.count || 0);
+      } else {
+        console.warn('Failed to fetch match requests count:', matchRequestsResponse.status);
+      }
+
+      const total = unreadNotifications + pendingMatchRequests;
+      setCounts({ unreadNotifications, pendingMatchRequests, total });
+      // Only log when counts actually change
+      if (counts.total !== total || counts.unreadNotifications !== unreadNotifications || counts.pendingMatchRequests !== pendingMatchRequests) {
+        console.log('Updated notification counts:', { unreadNotifications, pendingMatchRequests, total });
+      }
+    } catch (error) {
+      console.error('Error fetching notification counts:', error);
+      // Set counts to 0 when API is not available
+      setCounts({ unreadNotifications: 0, pendingMatchRequests: 0, total: 0 });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetNotificationCounts = async () => {
+    try {
+      // Try to mark all notifications as read via API
+      const response = await fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      if (response.ok || response.status === 404) {
+        // Reset counts immediately for better UX and then refetch to confirm
+        setCounts({ unreadNotifications: 0, pendingMatchRequests: counts.pendingMatchRequests, total: counts.pendingMatchRequests }); // Keep pending match requests
+        await fetchNotificationCounts(); // Refetch to get the actual state from server
+        console.log('Notification counts reset and refetched.');
+      } else {
+        // If API call failed, still attempt to refetch as a fallback
+        await fetchNotificationCounts();
+      }
+    } catch (error) {
+      console.error('Error resetting notification counts:', error);
+      // Attempt to refetch counts even if reset failed
+      await fetchNotificationCounts();
+    }
+  };
+
+  const deleteNotification = async (notificationId: number) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        // Refresh counts after deletion
+        await fetchNotificationCounts();
+        return true;
+      } else if (response.status === 404) {
+        // Notification not found - this is actually success (already deleted)
+        await fetchNotificationCounts();
+        return true;
+      } else {
+        // Try to get error message from response
+        let errorMessage = 'Unknown error';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          errorMessage = `HTTP ${response.status}`;
+        }
+        console.error('Failed to delete notification:', errorMessage);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      return false;
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      const response = await fetch('/api/notifications/clear-all', {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        // Refetch counts from server to get the actual state
+        await fetchNotificationCounts();
+        return true;
+      } else if (response.status === 404) {
+        // No notifications found - this is actually success
+        await fetchNotificationCounts();
+        return true;
+      } else {
+        // Try to get error message from response
+        let errorMessage = 'Unknown error';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          errorMessage = `HTTP ${response.status}`;
+        }
+        console.error('Failed to clear all notifications:', errorMessage);
+        // Still attempt to refetch counts as a fallback
+        await fetchNotificationCounts();
+        return false;
+      }
+    } catch (error) {
+      console.error('Error clearing all notifications:', error);
+      // Attempt to refetch counts even if clear all failed
+      await fetchNotificationCounts();
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    fetchNotificationCounts();
+
+    // Poll for updates much less frequently to reduce server load
+    // Only poll every 5 minutes (300000ms) instead of every minute
+    const interval = setInterval(fetchNotificationCounts, 300000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  return { 
+    counts, 
+    isLoading, 
+    resetNotificationCounts, 
+    refetchCounts: fetchNotificationCounts,
+    deleteNotification,
+    clearAllNotifications
+  };
+}

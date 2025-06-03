@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
+import { useChat } from "@/hooks/use-chat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Send, User, MessageCircle, Loader2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Send, User, MessageCircle, Loader2, MoreVertical, Star } from "lucide-react";
+import RatingDialog from "@/components/rating-dialog";
 
 interface ChatMessage {
   id: number;
@@ -33,6 +41,7 @@ interface Match {
 export default function ChatPage() {
   const { user, isLoading } = useAuth();
   const { toast } = useToast();
+  const { resetChatCounts } = useChat();
   const [matches, setMatches] = useState<Match[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -40,7 +49,15 @@ export default function ChatPage() {
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [isRatingDialogOpen, setIsRatingDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Reset chat counts when page loads
+  useEffect(() => {
+    if (user) {
+      resetChatCounts();
+    }
+  }, [user, resetChatCounts]);
 
   // Fetch accepted matches
   useEffect(() => {
@@ -56,6 +73,13 @@ export default function ChatPage() {
           if (data.length > 0 && !selectedMatch) {
             setSelectedMatch(data[0]);
           }
+        } else {
+          console.error('Failed to fetch matches:', response.status, response.statusText);
+          toast({
+            title: "Error",
+            description: "Failed to load your matches. Please try again.",
+            variant: "destructive",
+          });
         }
       } catch (error) {
         console.error('Error fetching matches:', error);
@@ -88,6 +112,8 @@ export default function ChatPage() {
         if (response.ok) {
           const data = await response.json();
           setMessages(data);
+        } else {
+          console.error('Failed to fetch messages:', response.status, response.statusText);
         }
       } catch (error) {
         console.error('Error fetching messages:', error);
@@ -224,26 +250,46 @@ export default function ChatPage() {
                 <>
                   {/* Chat Header */}
                   <CardHeader className="border-b">
-                    <div className="flex items-center space-x-3">
-                      {selectedMatch.otherUser.imageUrl ? (
-                        <img
-                          src={selectedMatch.otherUser.imageUrl}
-                          alt={selectedMatch.otherUser.fullName || selectedMatch.otherUser.username}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
-                          <User className="w-5 h-5 text-white" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        {selectedMatch.otherUser.imageUrl ? (
+                          <img
+                            src={selectedMatch.otherUser.imageUrl}
+                            alt={selectedMatch.otherUser.fullName || selectedMatch.otherUser.username}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                            <User className="w-5 h-5 text-white" />
+                          </div>
+                        )}
+                        <div>
+                          <h3 className="font-semibold text-gray-800">
+                            {selectedMatch.otherUser.fullName || selectedMatch.otherUser.username}
+                          </h3>
+                          <p className="text-sm text-gray-500">
+                            {selectedMatch.otherUser.skillsToTeach?.length || 0} skills to teach
+                          </p>
                         </div>
-                      )}
-                      <div>
-                        <h3 className="font-semibold text-gray-800">
-                          {selectedMatch.otherUser.fullName || selectedMatch.otherUser.username}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          {selectedMatch.otherUser.skillsToTeach?.length || 0} skills to teach
-                        </p>
                       </div>
+                      
+                      {/* 3-dots menu */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => setIsRatingDialogOpen(true)}
+                            className="cursor-pointer"
+                          >
+                            <Star className="mr-2 h-4 w-4" />
+                            Rate User
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </CardHeader>
 
@@ -328,6 +374,22 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+      
+      {/* Rating Dialog */}
+      {selectedMatch && (
+        <RatingDialog
+          isOpen={isRatingDialogOpen}
+          onClose={() => setIsRatingDialogOpen(false)}
+          user={selectedMatch.otherUser}
+          matchId={selectedMatch.id}
+          onReviewSubmitted={() => {
+            toast({
+              title: "Success",
+              description: "Thank you for your feedback!",
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

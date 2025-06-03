@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
+import { useNotifications } from "@/contexts/NotificationContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,34 +44,41 @@ interface MatchRequest {
 export default function NotificationsPage() {
   const { user, isLoading } = useAuth();
   const { toast } = useToast();
+  const { deleteNotification, clearAllNotifications } = useNotifications();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [matchRequests, setMatchRequests] = useState<MatchRequest[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
   const [respondingToMatch, setRespondingToMatch] = useState<number | null>(null);
+  const [deletingNotification, setDeletingNotification] = useState<number | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
+
+  const fetchUserNotifications = useCallback(async () => {
+    if (!user) {
+      setLoadingNotifications(false);
+      return;
+    }
+    setLoadingNotifications(true);
+    try {
+      const response = await fetch('/api/notifications', { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data);
+      } else {
+        console.error('Failed to fetch notifications:', response.statusText);
+        toast({ title: "Error", description: "Could not refresh notifications list.", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      toast({ title: "Error", description: "Could not refresh notifications list.", variant: "destructive" });
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, [user, toast]);
 
   // Fetch notifications
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const response = await fetch('/api/notifications', {
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setNotifications(data);
-        }
-      } catch (error) {
-        console.error('Error fetching notifications:', error);
-      } finally {
-        setLoadingNotifications(false);
-      }
-    };
-
-    if (user) {
-      fetchNotifications();
-    }
-  }, [user]);
+    fetchUserNotifications();
+  }, [fetchUserNotifications]);
 
   // Fetch pending match requests
   useEffect(() => {
@@ -141,6 +149,74 @@ export default function NotificationsPage() {
       );
     } catch (error) {
       console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId: number) => {
+    setDeletingNotification(notificationId);
+    try {
+      const success = await deleteNotification(notificationId);
+      if (success) {
+        await fetchUserNotifications(); // Re-fetch the list from server
+        toast({
+          title: "Notification Deleted",
+          description: "The notification has been removed.",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to delete notification. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete notification. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingNotification(null);
+    }
+  };
+
+  const handleClearAllNotifications = async () => {
+    setClearingAll(true);
+    try {
+      // Check if there are any notifications to clear
+      if (notifications.length === 0) {
+        toast({
+          title: "No Notifications",
+          description: "There are no notifications to clear.",
+        });
+        setClearingAll(false);
+        return;
+      }
+
+      const success = await clearAllNotifications();
+      if (success) {
+        await fetchUserNotifications(); // Re-fetch the list from server
+        toast({
+          title: "All Notifications Cleared",
+          description: "All notifications have been removed.",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to clear all notifications. Please try again later.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error clearing all notifications:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clear all notifications. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setClearingAll(false);
     }
   };
 
@@ -254,10 +330,28 @@ export default function NotificationsPage() {
 
         {/* All Notifications */}
         <div>
-          <h2 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center">
-            <Bell className="w-6 h-6 mr-2 text-blue-500" />
-            All Notifications
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-semibold text-gray-800 flex items-center">
+              <Bell className="w-6 h-6 mr-2 text-blue-500" />
+              All Notifications
+            </h2>
+            {notifications.length > 0 && (
+              <Button
+                onClick={handleClearAllNotifications}
+                disabled={clearingAll}
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50"
+              >
+                {clearingAll ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <X className="w-4 h-4 mr-2" />
+                )}
+                Clear All
+              </Button>
+            )}
+          </div>
           
           {notifications.length === 0 ? (
             <Card className="bg-white">
@@ -277,24 +371,44 @@ export default function NotificationsPage() {
                   transition={{ duration: 0.3 }}
                 >
                   <Card 
-                    className={`bg-white shadow-md hover:shadow-lg transition-shadow cursor-pointer ${
+                    className={`bg-white shadow-md hover:shadow-lg transition-shadow ${
                       !notification.isRead ? 'ring-2 ring-blue-200' : ''
                     }`}
-                    onClick={() => !notification.isRead && markAsRead(notification.id)}
                   >
                     <CardContent className="p-6">
                       <div className="flex items-start space-x-4">
                         <div className="flex-shrink-0">
                           {getNotificationIcon(notification.type)}
                         </div>
-                        <div className="flex-1">
+                        <div 
+                          className="flex-1 cursor-pointer"
+                          onClick={() => !notification.isRead && markAsRead(notification.id)}
+                        >
                           <div className="flex items-center justify-between mb-2">
                             <h3 className="font-semibold text-gray-800">{notification.title}</h3>
-                            {!notification.isRead && (
-                              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                                New
-                              </Badge>
-                            )}
+                            <div className="flex items-center space-x-2">
+                              {!notification.isRead && (
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                                  New
+                                </Badge>
+                              )}
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteNotification(notification.id);
+                                }}
+                                disabled={deletingNotification === notification.id}
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                              >
+                                {deletingNotification === notification.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <X className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </div>
                           </div>
                           <p className="text-gray-600 text-sm mb-2">{notification.message}</p>
                           <p className="text-gray-400 text-xs">

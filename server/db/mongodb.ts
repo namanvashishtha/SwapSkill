@@ -195,6 +195,18 @@ const chatMessageSchema = new mongoose.Schema({
   matchId: { type: Number, required: true },
   senderId: { type: Number, required: true },
   message: { type: String, required: true },
+  isRead: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// Review schema
+const reviewSchema = new mongoose.Schema({
+  id: { type: Number, required: true, unique: true },
+  reviewerId: { type: Number, required: true },
+  revieweeId: { type: Number, required: true },
+  matchId: { type: Number, required: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  comment: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -204,6 +216,7 @@ export const SkillModel = mongoose.model('Skill', skillSchema);
 export const MatchModel = mongoose.model('Match', matchSchema);
 export const NotificationModel = mongoose.model('Notification', notificationSchema);
 export const ChatMessageModel = mongoose.model('ChatMessage', chatMessageSchema);
+export const ReviewModel = mongoose.model('Review', reviewSchema);
 
 // Helper functions
 export function mongoUserToAppUser(mongoUser: any): User & { bio?: string; imageUrl?: string | null } {

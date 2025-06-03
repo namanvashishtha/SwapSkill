@@ -32,12 +32,51 @@ export default function UserDashboard() {
   const [isAddingTeachSkill, setIsAddingTeachSkill] = useState(false);
   const [isAddingLearnSkill, setIsAddingLearnSkill] = useState(false);
   const [removingSkill, setRemovingSkill] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [userRating, setUserRating] = useState<{ averageRating: number; totalReviews: number }>({ averageRating: 0, totalReviews: 0 });
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
   
+  // Fetch user reviews and rating
+  const fetchUserReviews = async (userId: number) => {
+    try {
+      setIsLoadingReviews(true);
+      const [reviewsResponse, ratingResponse] = await Promise.all([
+        fetch(`/api/users/${userId}/reviews`, { credentials: 'include' }),
+        fetch(`/api/users/${userId}/rating`, { credentials: 'include' })
+      ]);
+      
+      if (reviewsResponse.ok) {
+        const reviewsData = await reviewsResponse.json();
+        setReviews(reviewsData);
+      } else {
+        console.error('Failed to fetch reviews');
+        setReviews([]);
+      }
+      
+      if (ratingResponse.ok) {
+        const ratingData = await ratingResponse.json();
+        setUserRating(ratingData);
+      } else {
+        console.error('Failed to fetch rating');
+        setUserRating({ averageRating: 0, totalReviews: 0 });
+      }
+    } catch (error) {
+      console.error('Error fetching user reviews and rating:', error);
+      setReviews([]);
+      setUserRating({ averageRating: 0, totalReviews: 0 });
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  };
+
   // Update skills whenever user data changes
   useEffect(() => {
     if (user) {
       setSkillsToTeach(user.skillsToTeach ?? []);
       setSkillsToLearn(user.skillsToLearn ?? []);
+      
+      // Fetch reviews and rating for the current user
+      fetchUserReviews(user.id);
       
       // Log user data for debugging
       console.log("User data in dashboard:", user);
@@ -411,7 +450,21 @@ export default function UserDashboard() {
             <Card className="hover:shadow-xl transition-shadow bg-white text-gray-800 shadow-md rounded-xl p-6">
               <CardContent>
                 <h3 className="text-xl font-semibold">Rating</h3>
-                <p className="text-3xl font-bold text-indigo-600">4.9⭐</p>
+                {userRating.totalReviews > 0 ? (
+                  <div>
+                    <p className="text-3xl font-bold text-indigo-600">
+                      {userRating.averageRating}⭐
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Based on {userRating.totalReviews} review{userRating.totalReviews !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xl font-medium text-gray-500">No ratings yet</p>
+                    <p className="text-sm text-gray-400">Complete matches to get rated</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -545,6 +598,93 @@ export default function UserDashboard() {
                   ) : "Add"}
                 </Button>
               </div>
+            </div>
+          </div>
+
+          {/* Reviews Section */}
+          <div className="mt-10">
+            <div className="bg-white rounded-xl p-6 shadow-lg">
+              <h3 className="text-2xl font-semibold mb-6">Reviews</h3>
+              
+              {isLoadingReviews ? (
+                <div className="flex items-center justify-center py-8">
+                  <svg className="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="ml-2 text-gray-600">Loading reviews...</span>
+                </div>
+              ) : reviews.length > 0 ? (
+                <div className="space-y-4">
+                  {reviews.map((review, index) => (
+                    <div key={review.id || index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <div className="flex items-start space-x-3">
+                        {/* Reviewer Avatar */}
+                        <div className="flex-shrink-0">
+                          {review.reviewer?.imageUrl ? (
+                            <img
+                              src={review.reviewer.imageUrl}
+                              alt={review.reviewer.fullName || review.reviewer.username}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-semibold">
+                              {review.reviewer?.username?.charAt(0).toUpperCase() || "?"}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Review Content */}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <h4 className="font-medium text-gray-900">
+                                {review.reviewer?.fullName || review.reviewer?.username || "Anonymous"}
+                              </h4>
+                              <div className="flex items-center space-x-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <span
+                                    key={i}
+                                    className={`text-sm ${
+                                      i < review.rating ? "text-yellow-400" : "text-gray-300"
+                                    }`}
+                                  >
+                                    ⭐
+                                  </span>
+                                ))}
+                                <span className="text-sm text-gray-500 ml-2">
+                                  {review.rating}/5
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-sm text-gray-500">
+                              {new Date(review.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          
+                          {review.comment && (
+                            <p className="text-gray-700 text-sm leading-relaxed">
+                              {review.comment}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 mb-2">
+                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-medium text-gray-500 mb-1">No reviews yet</h4>
+                  <p className="text-gray-400">
+                    Complete skill exchanges to receive reviews from other users
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

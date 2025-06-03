@@ -59,10 +59,24 @@ export const chatMessageSchema = z.object({
   matchId: z.number(),
   senderId: z.number(),
   message: z.string(),
+  isRead: z.boolean().default(false),
   createdAt: z.date(),
 });
 
 export const insertChatMessageSchema = chatMessageSchema.omit({ id: true, createdAt: true });
+
+// Review schema for user reviews
+export const reviewSchema = z.object({
+  id: z.number(),
+  reviewerId: z.number(),
+  revieweeId: z.number(),
+  matchId: z.number(),
+  rating: z.number().min(1).max(5),
+  comment: z.string().optional(),
+  createdAt: z.date(),
+});
+
+export const insertReviewSchema = reviewSchema.omit({ id: true, createdAt: true });
 
 // For compatibility with existing code, we'll keep a users object
 export const users = {
@@ -100,8 +114,10 @@ export type InsertSkill = z.infer<typeof insertSkillSchema>;
 export type InsertMatch = z.infer<typeof insertMatchSchema>;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type User = z.infer<typeof userSchema>;
 export type Skill = z.infer<typeof skillSchema>;
 export type Match = z.infer<typeof matchSchema>;
 export type Notification = z.infer<typeof notificationSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
+export type Review = z.infer<typeof reviewSchema>;

@@ -1,16 +1,11 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { NotificationBadge } from "@/components/ui/notification-badge";
-import { useNotifications } from "@/hooks/use-notifications";
-import { useChat } from "@/hooks/use-chat";
 import { Bell, MessageCircle, Users } from "lucide-react";
 
 export default function Navbar() {
   const { user, logoutMutation } = useAuth();
   const [, setLocation] = useLocation();
-  const { counts: notificationCounts } = useNotifications();
-  const { counts: chatCounts } = useChat();
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
@@ -21,6 +16,14 @@ export default function Navbar() {
         // window.location.href = "/"; // Alternative approach if needed
       },
     });
+  };
+
+  const handleNotificationClick = () => {
+    setLocation("/notifications");
+  };
+
+  const handleChatClick = () => {
+    setLocation("/chat");
   };
 
   return (
@@ -82,29 +85,25 @@ export default function Navbar() {
               <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
             </Link>
             
-            <NotificationBadge count={chatCounts.unreadMessages} className="mr-2">
-              <Link
-                href="/chat"
-                className="bg-green-500 text-white font-medium py-3 px-3 rounded-full relative overflow-hidden transition-all duration-300 ease-in-out border border-green-500 hover:text-green-500 group flex items-center justify-center"
-              >
-                <span className="relative z-10">
-                  <MessageCircle className="w-5 h-5" />
-                </span>
-                <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
-              </Link>
-            </NotificationBadge>
+            <button
+              onClick={handleChatClick}
+              className="bg-green-500 text-white font-medium py-3 px-3 rounded-full relative overflow-hidden transition-all duration-300 ease-in-out border border-green-500 hover:text-green-500 group flex items-center justify-center mr-2"
+            >
+              <span className="relative z-10">
+                <MessageCircle className="w-5 h-5" />
+              </span>
+              <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
+            </button>
             
-            <NotificationBadge count={notificationCounts.total} className="mr-2">
-              <Link
-                href="/notifications"
-                className="bg-purple-500 text-white font-medium py-3 px-3 rounded-full relative overflow-hidden transition-all duration-300 ease-in-out border border-purple-500 hover:text-purple-500 group flex items-center justify-center"
-              >
-                <span className="relative z-10">
-                  <Bell className="w-5 h-5" />
-                </span>
-                <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
-              </Link>
-            </NotificationBadge>
+            <button
+              onClick={handleNotificationClick}
+              className="bg-purple-500 text-white font-medium py-3 px-3 rounded-full relative overflow-hidden transition-all duration-300 ease-in-out border border-purple-500 hover:text-purple-500 group flex items-center justify-center mr-2"
+            >
+              <span className="relative z-10">
+                <Bell className="w-5 h-5" />
+              </span>
+              <span className="absolute inset-0 bg-white transform scale-x-0 origin-left transition-transform duration-300 ease-in-out group-hover:scale-x-100"></span>
+            </button>
             <button
               onClick={handleLogout}
               type="button"

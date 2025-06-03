@@ -17,6 +17,7 @@ import TermsPage from "@/pages/terms-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import CookiePolicyPage from "@/pages/cookie-policy-page";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ProtectedRoute } from "@/lib/protected-route";
 import UserDashboard from "@/pages/user-dashboard";
 import ProfileEdit from "@/pages/profile-edit";
@@ -24,6 +25,7 @@ import ProfilePage from "@/pages/profile-page";
 import MatchPage from "@/pages/match-page";
 import NotificationsPage from "./pages/notifications-page";
 import ChatPage from "@/pages/chat-page";
+import UserProfileView from "@/pages/user-profile-view";
 import ScrollToTop from "@/components/ScrollToTop";
 import DynamicScrollbar from "@/components/DynamicScrollbar";
 import { Loader2 } from "lucide-react";
@@ -110,6 +112,7 @@ function Router() {
       </Route>
       <ProtectedRoute path="/profile-edit" component={ProfileEdit} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
+      <ProtectedRoute path="/user/:userId" component={UserProfileView} />
       <ProtectedRoute path="/user-dashboard" component={UserDashboard} />
       <ProtectedRoute path="/match" component={MatchPage} />
       <ProtectedRoute path="/notifications" component={NotificationsPage} />
@@ -124,13 +127,15 @@ function Router() {
 function App() {
   return (
     <AuthProvider>
-      <ScrollToTop>
-        <DynamicScrollbar />
-        <Navbar />
-        <div className="pt-16"> {/* Add padding to account for fixed navbar */}
-          <Router />
-        </div>
-      </ScrollToTop>
+      <NotificationProvider>
+        <ScrollToTop>
+          <DynamicScrollbar />
+          <Navbar />
+          <div className="pt-16"> {/* Add padding to account for fixed navbar */}
+            <Router />
+          </div>
+        </ScrollToTop>
+      </NotificationProvider>
     </AuthProvider>
   );
 }
