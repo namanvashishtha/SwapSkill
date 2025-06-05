@@ -12,6 +12,7 @@ import {
   NotificationModel, 
   ChatMessageModel, 
   ReviewModel, 
+  SessionModel,
   mongoUserToAppUser 
 } from "./db/mongodb.js";
 import multer from "multer";
@@ -216,6 +217,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test endpoint to create sample sessions (for debugging)
+  app.post("/api/test/create-sessions", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      console.log(`Creating test sessions for user ${userId}`);
+      
+      // Get the next available session ID
+      const lastSession = await SessionModel.findOne().sort({ id: -1 });
+      let nextId = lastSession ? lastSession.id + 1 : 1;
+      
+      // Create test sessions spread across the next 12 weeks
+      const testSessions = [];
+      const now = new Date();
+      
+      for (let week = 0; week < 12; week++) {
+        // Create 1-3 sessions per week randomly
+        const sessionsThisWeek = Math.floor(Math.random() * 3) + 1;
+        
+        for (let session = 0; session < sessionsThisWeek; session++) {
+          const sessionDate = new Date(now);
+          sessionDate.setDate(sessionDate.getDate() + (week * 7) + Math.floor(Math.random() * 7));
+          
+          const testSession = {
+            id: nextId++,
+            matchId: 1, // Using a dummy match ID
+            proposerId: userId,
+            participantId: userId + 1, // Using a dummy participant ID
+            title: `Test Session ${nextId - 1}`,
+            scheduledDate: sessionDate,
+            duration: 60, // 60 minutes
+            location: 'Online',
+            status: Math.random() > 0.5 ? 'accepted' : 'proposed',
+            proposedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          testSessions.push(testSession);
+        }
+      }
+      
+      // Save all test sessions
+      for (const session of testSessions) {
+        const newSession = new SessionModel(session);
+        await newSession.save();
+        console.log(`Created session: ${session.title} on ${session.scheduledDate}`);
+      }
+      
+      res.json({ 
+        message: `Created ${testSessions.length} test sessions`,
+        sessions: testSessions.length
+      });
+    } catch (error) {
+      console.error("Error creating test sessions:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error creating test sessions" 
+      });
+    }
+  });
+
   // Available skills API
   app.get("/api/available-skills", async (req: express.Request, res: express.Response) => {
     try {
@@ -298,6 +363,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error searching available skills:", error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Error searching skills" 
+      });
+    }
+  });
+
+  // Weekly session statistics endpoint
+  app.get("/api/sessions/weekly-stats", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+
+      const userId = (req.user as User).id;
+      
+      // Get current date and calculate the next 12 weeks
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endDate = new Date(startOfToday);
+      endDate.setDate(endDate.getDate() + (12 * 7)); // 12 weeks from today
+
+      // Fetch all future sessions for the user (as proposer or participant)
+      const sessions = await SessionModel.find({
+        $and: [
+          {
+            $or: [
+              { proposerId: userId },
+              { participantId: userId }
+            ]
+          },
+          {
+            scheduledDate: {
+              $gte: startOfToday,
+              $lt: endDate
+            }
+          },
+          {
+            status: { $in: ['proposed', 'accepted'] } // Only include proposed and accepted sessions
+          }
+        ]
+      }).sort({ scheduledDate: 1 });
+
+      // Initialize weekly data structure
+      const weeklyData: {
+        name: string;
+        sessions: number;
+        weekStart: string;
+        weekEnd: string;
+      }[] = [];
+      for (let i = 0; i < 12; i++) {
+        const weekStart = new Date(startOfToday);
+        weekStart.setDate(weekStart.getDate() + (i * 7));
+        
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        
+        // Format week label (e.g., "Week 1", "Week 2", etc.)
+        const weekLabel = `Week ${i + 1}`;
+        
+        weeklyData.push({
+          name: weekLabel,
+          sessions: 0,
+          weekStart: weekStart.toISOString(),
+          weekEnd: weekEnd.toISOString()
+        });
+      }
+
+      // Count sessions for each week
+      sessions.forEach(session => {
+        const sessionDate = new Date(session.scheduledDate);
+        const daysDiff = Math.floor((sessionDate.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+        const weekIndex = Math.floor(daysDiff / 7);
+        
+        if (weekIndex >= 0 && weekIndex < 12) {
+          weeklyData[weekIndex].sessions++;
+        }
+      });
+
+      res.json(weeklyData);
+    } catch (error) {
+      console.error("Error fetching weekly session data:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching weekly session data" 
       });
     }
   });
@@ -2555,52 +2701,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get a single session by ID
-  app.get("/api/sessions/:sessionId", async (req: express.Request, res: express.Response) => {
+  // Get weekly session statistics for dashboard (upcoming sessions)
+  app.get("/api/sessions/weekly-stats", async (req: express.Request, res: express.Response) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "You must be logged in" });
       }
       
       const userId = (req.user as User).id;
-      const sessionId = parseInt(req.params.sessionId, 10);
       
-      if (isNaN(sessionId)) {
-        return res.status(400).json({ message: "Invalid session ID" });
-      }
+      // Get sessions for the current user from today and next 7 days
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
       
-      const session = await storage.getSession(sessionId);
-      if (!session) {
-        return res.status(404).json({ message: "Session not found" });
-      }
+      const oneWeekFromNow = new Date();
+      oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+      oneWeekFromNow.setHours(23, 59, 59, 999); // End of the 7th day
       
-      // Verify user is part of this session
-      if (session.proposerId !== userId && session.participantId !== userId) {
-        return res.status(403).json({ message: "Access denied to this session" });
-      }
-      
-      // Enhance session with match and user information
-      const match = await storage.getMatch(session.matchId);
-      const otherUserId = session.proposerId === userId ? session.participantId : session.proposerId;
-      const otherUser = await storage.getUser(otherUserId);
-      
-      const enhancedSession = {
-        ...session,
-        match,
-        otherUser: otherUser ? {
-          id: otherUser.id,
-          username: otherUser.username,
-          fullName: otherUser.fullName,
-          imageUrl: otherUser.imageUrl
-        } : null,
-        isProposer: session.proposerId === userId
+      const filter = {
+        $or: [
+          { proposerId: userId },
+          { participantId: userId }
+        ],
+        status: { $in: ['proposed', 'accepted'] }, // Show proposed and accepted sessions (upcoming)
+        scheduledDate: { 
+          $gte: today,
+          $lte: oneWeekFromNow
+        }
       };
       
-      res.json(enhancedSession);
+      const sessions = await storage.getSessions(filter);
+      
+      // Initialize weekly data structure
+      const weeklyData = [
+        { name: "Mon", sessions: 0 },
+        { name: "Tue", sessions: 0 },
+        { name: "Wed", sessions: 0 },
+        { name: "Thu", sessions: 0 },
+        { name: "Fri", sessions: 0 },
+        { name: "Sat", sessions: 0 },
+        { name: "Sun", sessions: 0 },
+      ];
+      
+      // Count sessions by day of week
+      sessions.forEach(session => {
+        const sessionDate = new Date(session.scheduledDate);
+        const dayOfWeek = sessionDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        
+        // Convert to our array index (Monday = 0, Sunday = 6)
+        const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        weeklyData[dayIndex].sessions++;
+      });
+      
+      res.json(weeklyData);
     } catch (error) {
-      console.error("Error fetching session:", error);
+      console.error("Error fetching weekly session stats:", error);
       res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Error fetching session" 
+        message: error instanceof Error ? error.message : "Error fetching weekly session statistics" 
       });
     }
   });
@@ -2652,6 +2809,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching user sessions:", error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Error fetching sessions" 
+      });
+    }
+  });
+
+  // Get a single session by ID
+  app.get("/api/sessions/:sessionId", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      const sessionId = parseInt(req.params.sessionId, 10);
+      
+      if (isNaN(sessionId)) {
+        return res.status(400).json({ message: "Invalid session ID" });
+      }
+      
+      const session = await storage.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+      
+      // Verify user is part of this session
+      if (session.proposerId !== userId && session.participantId !== userId) {
+        return res.status(403).json({ message: "Access denied to this session" });
+      }
+      
+      // Enhance session with match and user information
+      const match = await storage.getMatch(session.matchId);
+      const otherUserId = session.proposerId === userId ? session.participantId : session.proposerId;
+      const otherUser = await storage.getUser(otherUserId);
+      
+      const enhancedSession = {
+        ...session,
+        match,
+        otherUser: otherUser ? {
+          id: otherUser.id,
+          username: otherUser.username,
+          fullName: otherUser.fullName,
+          imageUrl: otherUser.imageUrl
+        } : null,
+        isProposer: session.proposerId === userId
+      };
+      
+      res.json(enhancedSession);
+    } catch (error) {
+      console.error("Error fetching session:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error fetching session" 
       });
     }
   });

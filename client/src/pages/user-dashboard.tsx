@@ -10,15 +10,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Home, Calendar, Book, Settings, User, X, Trash2 } from "lucide-react";
 import { queryClient } from "../lib/queryClient";
 
-const data = [
-  { name: "Mon", sessions: 2 },
-  { name: "Tue", sessions: 4 },
-  { name: "Wed", sessions: 1 },
-  { name: "Thu", sessions: 3 },
-  { name: "Fri", sessions: 5 },
-  { name: "Sat", sessions: 2 },
-  { name: "Sun", sessions: 0 },
-];
+// Default data structure for weekly sessions (12 weeks)
+const defaultWeeklyData = Array.from({ length: 12 }, (_, i) => ({
+  name: `Week ${i + 1}`,
+  sessions: 0,
+  weekStart: new Date(Date.now() + i * 7 * 24 * 60 * 60 * 1000).toISOString(),
+  weekEnd: new Date(Date.now() + (i * 7 + 6) * 24 * 60 * 60 * 1000).toISOString()
+}));
 
 export default function UserDashboard() {
   const { user, isLoading } = useAuth();
@@ -35,6 +33,39 @@ export default function UserDashboard() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [userRating, setUserRating] = useState<{ averageRating: number; totalReviews: number }>({ averageRating: 0, totalReviews: 0 });
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [weeklySessionData, setWeeklySessionData] = useState(defaultWeeklyData);
+  const [isLoadingSessionData, setIsLoadingSessionData] = useState(false);
+  
+  // Function to handle smooth scrolling to sessions graph
+  const scrollToSessions = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('Sessions clicked - starting scroll to sessions graph');
+    console.log('Current URL:', window.location.href);
+    
+    const sessionsElement = document.getElementById('sessions-graph');
+    console.log('Sessions element found:', !!sessionsElement);
+    
+    if (sessionsElement) {
+      // Calculate offset to account for fixed navbar and some padding
+      const navbarHeight = 72; // Approximate navbar height
+      const additionalPadding = 20; // Extra padding for better visual spacing
+      const elementPosition = sessionsElement.getBoundingClientRect().top + window.pageYOffset;
+      const offsetPosition = elementPosition - navbarHeight - additionalPadding;
+
+      console.log('Scrolling to position:', offsetPosition);
+      
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+      
+      console.log('Scroll command executed');
+    } else {
+      console.error('Sessions graph element not found');
+    }
+  };
   
   // Fetch user reviews and rating
   const fetchUserReviews = async (userId: number) => {
@@ -69,6 +100,29 @@ export default function UserDashboard() {
     }
   };
 
+  // Fetch weekly session statistics
+  const fetchWeeklySessionData = async () => {
+    try {
+      setIsLoadingSessionData(true);
+      const response = await fetch('/api/sessions/weekly-stats', { 
+        credentials: 'include' 
+      });
+      
+      if (response.ok) {
+        const weeklyData = await response.json();
+        setWeeklySessionData(weeklyData);
+      } else {
+        console.error('Failed to fetch weekly session data');
+        setWeeklySessionData(defaultWeeklyData);
+      }
+    } catch (error) {
+      console.error('Error fetching weekly session data:', error);
+      setWeeklySessionData(defaultWeeklyData);
+    } finally {
+      setIsLoadingSessionData(false);
+    }
+  };
+
   // Update skills whenever user data changes
   useEffect(() => {
     if (user) {
@@ -77,6 +131,9 @@ export default function UserDashboard() {
       
       // Fetch reviews and rating for the current user
       fetchUserReviews(user.id);
+      
+      // Fetch weekly session data
+      fetchWeeklySessionData();
       
       // Log user data for debugging
       console.log("User data in dashboard:", user);
@@ -356,7 +413,18 @@ export default function UserDashboard() {
                 Overview
               </motion.span>
             </Link> */}
-            <Link href="/sessions" className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 rounded-lg">
+            <div 
+              onClick={scrollToSessions}
+              className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 rounded-lg cursor-pointer transition-colors duration-200"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  scrollToSessions(e as any);
+                }
+              }}
+            >
               <Calendar className="w-5 h-5 flex-shrink-0" />
               <motion.span
                 initial={{ opacity: 0, width: 0 }}
@@ -366,7 +434,7 @@ export default function UserDashboard() {
               >
                 Sessions
               </motion.span>
-            </Link>
+            </div>
             <Link href="/skills" className="flex items-center gap-4 px-4 py-3 hover:bg-indigo-600 rounded-lg">
               <Book className="w-5 h-5 flex-shrink-0" />
               <motion.span
@@ -470,16 +538,41 @@ export default function UserDashboard() {
           </div>
 
           {/* Bar Chart */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-2xl font-semibold mb-4">Weekly Sessions</h2>
+          <div id="sessions-graph" className="bg-white p-6 rounded-lg shadow-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-semibold">Upcoming Sessions (Next 12 Weeks)</h2>
+              {isLoadingSessionData && (
+                <div className="flex items-center text-sm text-gray-500">
+                  <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading...
+                </div>
+              )}
+            </div>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data}>
+              <BarChart data={weeklySessionData}>
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip 
+                  formatter={(value: any, name: any) => [value, 'Sessions']}
+                  labelFormatter={(label: any) => {
+                    const weekData = weeklySessionData.find(w => w.name === label);
+                    if (weekData) {
+                      const startDate = new Date(weekData.weekStart).toLocaleDateString();
+                      const endDate = new Date(weekData.weekEnd).toLocaleDateString();
+                      return `${label} (${startDate} - ${endDate})`;
+                    }
+                    return label;
+                  }}
+                />
                 <Bar dataKey="sessions" fill="#6366f1" />
               </BarChart>
             </ResponsiveContainer>
+            <p className="text-sm text-gray-600 mt-2">
+              Shows your scheduled sessions for the next 12 weeks (proposed and accepted sessions only)
+            </p>
           </div>
 
           {/* Skills Sidebar (Mobile/Full View) */}

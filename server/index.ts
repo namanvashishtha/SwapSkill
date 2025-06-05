@@ -5,6 +5,24 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import { storage } from "./storage.js";
+import { networkInterfaces } from "os";
+
+// Function to get local IP address
+function getLocalIPAddress(): string {
+  const interfaces = networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    const nets = interfaces[name];
+    if (nets) {
+      for (const net of nets) {
+        // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+        if (net.family === 'IPv4' && !net.internal) {
+          return net.address;
+        }
+      }
+    }
+  }
+  return 'localhost';
+}
 
 const app = express();
 app.use(express.json());
@@ -73,12 +91,17 @@ app.use((req, res, next) => {
   // Use PORT from environment variable if available, otherwise use a random port
   // this serves both the API and the client.
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 0; // 0 means random available port
+  const host = process.env.HOST || '0.0.0.0'; // Allow access from any IP address
+  
   server.listen({
     port,
+    host,
   }, () => {
     const address = server.address();
     if (address && typeof address === "object") {
-      log(`serving on port ${address.port}`);
+      log(`serving on http://${host}:${address.port}`);
+      log(`Local access: http://localhost:${address.port}`);
+      log(`Network access: http://${getLocalIPAddress()}:${address.port}`);
     } else {
       log(`serving on unknown port`);
     }
