@@ -79,17 +79,26 @@ export function setupAuth(app: Express) {
         return res.status(400).send("All fields are required");
       }
 
-      const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
-        skillsToTeach: req.body.skillsToTeach || [],
-        skillsToLearn: req.body.skillsToLearn || [],
-      });
+      try {
+        const user = await storage.createUser({
+          ...req.body,
+          password: await hashPassword(req.body.password),
+          skillsToTeach: req.body.skillsToTeach || [],
+          skillsToLearn: req.body.skillsToLearn || [],
+        });
 
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json(user);
-      });
+        req.login(user, (err) => {
+          if (err) return next(err);
+          res.status(201).json(user);
+        });
+      } catch (dbError: any) {
+        if (dbError.code === 11000) {
+          // Duplicate key error
+          return res.status(409).send("Username or email already exists");
+        }
+        // Other database error
+        next(dbError);
+      }
     } catch (error) {
       next(error);
     }
