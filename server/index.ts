@@ -1,22 +1,27 @@
 // Load environment variables from .env file
 import 'dotenv/config';
 
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes.js";
-import { setupVite, serveStatic, log } from "./vite.js";
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
+import { setupAuth } from "./auth.js";
 import { storage } from "./storage.js";
+import { registerRoutes } from "./routes.js";
 import { networkInterfaces } from "os";
+import { setupVite, serveStatic, log } from "./vite.js";
+
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 // Function to get local IP address
 function getLocalIPAddress(): string {
   const interfaces = networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    const nets = interfaces[name];
-    if (nets) {
-      for (const net of nets) {
-        // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
-        if (net.family === 'IPv4' && !net.internal) {
-          return net.address;
+  for (const devName in interfaces) {
+    const iface = interfaces[devName];
+    if (iface) {
+      for (const details of iface) {
+        if (details.family === 'IPv4' && !details.internal) {
+          return details.address;
         }
       }
     }
@@ -24,7 +29,6 @@ function getLocalIPAddress(): string {
   return 'localhost';
 }
 
-const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -58,52 +62,104 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  // Initialize storage (MongoDB required - fail if not available)
+// Middleware for logging and error handling
+function errorHandler(err: any, req: express.Request, res: express.Response, next: express.NextFunction) {
+  // Log the error
+  console.error('Unhandled Error:', err);
+
+  // Check for specific error types
+  if (err.name === 'MongoError' && err.code === 11000) {
+    // Duplicate key error
+    return res.status(409).json({ 
+      message: 'A duplicate key error occurred', 
+      error: err.message 
+    });
+  }
+
+  if (err.name === 'ValidationError') {
+    // Mongoose validation error
+    return res.status(400).json({ 
+      message: 'Validation Error', 
+      errors: err.errors 
+    });
+  }
+
+  // Generic server error
+  res.status(500).json({ 
+    message: 'An unexpected error occurred', 
+    error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message 
+  });
+}
+
+async function startServer() {
   try {
+    // Initialize storage (database connection)
     await storage.initialize();
     log('Storage initialized successfully');
-  } catch (error) {
-    log(`Failed to initialize storage: ${error instanceof Error ? error.message : String(error)}`);
-    log('MongoDB is required for this application. Exiting...');
-    process.exit(1); // Exit the application if MongoDB is not available
-  }
 
-  const server = await registerRoutes(app);
+    // CORS configuration
+    const corsOptions = {
+      origin: process.env.FRONTEND_URL || 'http://localhost:5173', 
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization']
+    };
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    // Middleware
+    app.use(cors(corsOptions));
+    app.use(bodyParser.json());
+    app.use(bodyParser.urlencoded({ extended: true }));
 
-    res.status(status).json({ message });
-    throw err;
-  });
+    // Authentication setup
+    setupAuth(app);
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
+    // Routes setup
+    const server = await registerRoutes(app);
 
-  // Use PORT from environment variable if available, otherwise use a random port
-  // this serves both the API and the client.
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 0; // 0 means random available port
-  const host = process.env.HOST || '0.0.0.0'; // Allow access from any IP address
-  
-  server.listen({
-    port,
-    host,
-  }, () => {
-    const address = server.address();
-    if (address && typeof address === "object") {
-      log(`serving on http://${host}:${address.port}`);
-      log(`Local access: http://localhost:${address.port}`);
-      log(`Network access: http://${getLocalIPAddress()}:${address.port}`);
+    // Global error handling middleware (must be last)
+    app.use(errorHandler);
+
+    // Periodic session cleanup (optional)
+    setInterval(async () => {
+      try {
+        await storage.clearExpiredSessions();
+      } catch (error) {
+        console.error('Error during periodic session cleanup:', error);
+      }
+    }, 24 * 60 * 60 * 1000); // Run daily
+
+    // Vite setup for development
+    if (app.get("env") === "development") {
+      await setupVite(app, server);
     } else {
-      log(`serving on unknown port`);
+      serveStatic(app);
     }
-  });
-})();
+
+    // Start the server
+    server.listen(PORT, () => {
+      const address = server.address();
+      if (address && typeof address === "object") {
+        log(`serving on http://localhost:${address.port}`);
+        log(`Network access: http://${getLocalIPAddress()}:${address.port}`);
+      } else {
+        log(`serving on unknown port`);
+      }
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM signal received: closing HTTP server');
+      server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+      });
+    });
+
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Run the server
+startServer();

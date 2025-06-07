@@ -65,17 +65,44 @@ export class MongoStorage implements IStorage {
   private currentId: number = 1;
 
   constructor() {
-    // Create MongoDB session store
+    // Create MongoDB session store with improved configuration
     this.sessionStore = MongoStore.create({
       mongoUrl: MONGODB_URI,
       ttl: 60 * 60 * 24, // 1 day
       crypto: {
         secret: process.env.SESSION_SECRET || 'skillswap-session-secret'
-      }
+      },
+      // Use type assertion to bypass type checking
+      ...(({
+        generateId: (req: any) => `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      } as any))
     });
     console.log('MongoDB session store created');
   }
 
+  // Add a method to handle session-related errors
+  private handleSessionStoreError(error: any) {
+    console.error('Session Store Error:', error);
+    // You might want to implement more sophisticated error handling here
+    // For example, reconnecting to the database or logging the error
+  }
+
+  // Modify the session store initialization to add error handling
+  async initializeSessionStore(): Promise<void> {
+    try {
+      // Add error event listener to the session store
+      this.sessionStore.on('error', (error: any) => {
+        this.handleSessionStoreError(error);
+      });
+
+      console.log('Session store initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize session store:', error);
+      throw error;
+    }
+  }
+
+  // Modify the initialize method to call initializeSessionStore
   async initialize(): Promise<void> {
     try {
       // Connect to MongoDB - this will throw an error if connection fails
@@ -83,6 +110,9 @@ export class MongoStorage implements IStorage {
       this.isConnected = true;
       
       console.log('MongoDB connection established');
+      
+      // Initialize session store
+      await this.initializeSessionStore();
       
       // Set the current ID based on existing data
       await this.initializeCurrentId();
@@ -831,6 +861,17 @@ export class MongoStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting session:', error);
       throw error;
+    }
+  }
+
+  // Add a method to clear expired sessions manually
+  async clearExpiredSessions(): Promise<void> {
+    try {
+      const now = new Date();
+      await SessionModel.deleteMany({ expires: { $lt: now } });
+      console.log('Expired sessions cleared');
+    } catch (error) {
+      console.error('Error clearing expired sessions:', error);
     }
   }
 }
