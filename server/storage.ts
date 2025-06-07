@@ -72,10 +72,11 @@ export class MongoStorage implements IStorage {
       crypto: {
         secret: process.env.SESSION_SECRET || 'skillswap-session-secret'
       },
-      // Use type assertion to bypass type checking
-      ...(({
-        generateId: (req: any) => `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      } as any))
+      autoRemove: 'native', // Use MongoDB TTL for expired session cleanup
+      touchAfter: 24 * 3600, // Reduce write operations
+      collectionName: 'sessions',
+      stringify: false
+      // Note: Custom session ID generation should be configured in express-session options
     });
     console.log('MongoDB session store created');
   }
@@ -114,6 +115,9 @@ export class MongoStorage implements IStorage {
       // Initialize session store
       await this.initializeSessionStore();
       
+      // Clear any corrupted sessions
+      await this.clearCorruptedSessions();
+      
       // Set the current ID based on existing data
       await this.initializeCurrentId();
       
@@ -125,6 +129,64 @@ export class MongoStorage implements IStorage {
       console.error('Failed to initialize MongoDB storage:', error);
       this.isConnected = false;
       throw error; // Always fail if MongoDB is not available
+    }
+  }
+  
+  // Method to clear corrupted sessions (sessions with null IDs)
+  async clearCorruptedSessions(): Promise<void> {
+    try {
+      const SessionModel = await this.getSessionModel();
+      if (SessionModel) {
+        // Remove any sessions with null IDs
+        const result = await SessionModel.deleteMany({ id: null });
+        if (result.deletedCount > 0) {
+          console.log(`Cleaned up ${result.deletedCount} corrupted sessions`);
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing corrupted sessions:', error);
+    }
+  }
+  
+  // Method to get the session model (needed for clearCorruptedSessions)
+  private async getSessionModel() {
+    try {
+      // This will use the MongoDB model to access the sessions collection
+      return SessionModel;
+    } catch (error) {
+      console.error('Error getting session model:', error);
+      return null;
+    }
+  }
+  
+  // Method to clear expired sessions
+  async clearExpiredSessions(): Promise<void> {
+    try {
+      // First method: Clear expired sessions from the session store
+      if (this.sessionStore && typeof this.sessionStore.all === 'function') {
+        const now = new Date();
+        const sessions = await this.sessionStore.all();
+        
+        // Define a type for session data
+        interface SessionData {
+          expires?: Date | string;
+          [key: string]: any; // Allow other properties
+        }
+        
+        for (const [sid, session] of Object.entries(sessions) as [string, SessionData][]) {
+          if (session.expires && new Date(session.expires) < now) {
+            await this.sessionStore.destroy(sid);
+          }
+        }
+      }
+
+      // Second method: Clear expired sessions from the MongoDB collection directly
+      const now = new Date();
+      await SessionModel.deleteMany({ expires: { $lt: now } });
+      
+      console.log('Expired sessions cleared');
+    } catch (error) {
+      console.error('Error during session cleanup:', error);
     }
   }
 
@@ -864,16 +926,7 @@ export class MongoStorage implements IStorage {
     }
   }
 
-  // Add a method to clear expired sessions manually
-  async clearExpiredSessions(): Promise<void> {
-    try {
-      const now = new Date();
-      await SessionModel.deleteMany({ expires: { $lt: now } });
-      console.log('Expired sessions cleared');
-    } catch (error) {
-      console.error('Error clearing expired sessions:', error);
-    }
-  }
+
 }
 
 // Create and export the pure MongoDB storage instance
