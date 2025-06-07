@@ -89,8 +89,12 @@ export default function AuthForm({ isSignup = false, scrollToTop }: AuthFormProp
 
     const onLoginSubmit = async (data: LoginFormData) => {
       try {
+        console.log("Login submission with:", data.username);
+        
         // Use the mutation directly and wait for it to complete
-        await loginMutation.mutateAsync(data);
+        const userData = await loginMutation.mutateAsync(data);
+        
+        console.log("Login successful, received user data:", userData);
         
         // Show success toast
         toast({
@@ -98,8 +102,53 @@ export default function AuthForm({ isSignup = false, scrollToTop }: AuthFormProp
           description: "Welcome back to SwapSkill!",
         });
         
-        // Force a reload of the page to ensure all state is properly updated
-        window.location.href = "/user-dashboard";
+        // Check if we can fetch user data to verify session is active
+        try {
+          const verifySession = async () => {
+            try {
+              // Make a request to verify the session is active
+              const response = await fetch('/api/user', {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                  'Accept': 'application/json'
+                }
+              });
+              
+              if (response.ok) {
+                console.log("Session verified, redirecting to dashboard...");
+                // Force a full page load to ensure session is recognized
+                window.location.href = "/user-dashboard";
+                return true;
+              }
+              return false;
+            } catch (e) {
+              console.error("Session verification error:", e);
+              return false;
+            }
+          };
+          
+          // Try verifying the session immediately
+          const verified = await verifySession();
+          if (!verified) {
+            // If not verified, try again after a delay
+            console.log("Session not immediately available, waiting 500ms before retry...");
+            setTimeout(async () => {
+              const retryVerified = await verifySession();
+              if (!retryVerified) {
+                // As a last resort, just redirect anyway
+                console.log("Session still not verified after retry, redirecting anyway...");
+                window.location.href = "/user-dashboard";
+              }
+            }, 500);
+          }
+        } catch (sessionError) {
+          console.error("Error during session verification:", sessionError);
+          // Redirect anyway as a fallback
+          setTimeout(() => {
+            window.location.href = "/user-dashboard";
+          }, 800);
+        }
       } catch (error) {
         console.error("Login error:", error);
         // Error handling is already done in the mutation

@@ -34,15 +34,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+      try {
+        console.log("Attempting login for user:", credentials.username);
+        const res = await apiRequest("POST", "/api/login", credentials);
+        
+        // Check for non-200 responses and handle them appropriately
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => null) || { message: `Error: ${res.status} ${res.statusText}` };
+          console.error("Login API error:", errorData);
+          throw new Error(errorData.message || "Login failed");
+        }
+        
+        const userData = await res.json();
+        console.log("API login successful for:", userData.username);
+        return userData;
+      } catch (error) {
+        console.error("Login mutation error:", error);
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
-      console.log("Login successful, user:", user);
+      console.log("Login successful, updating user state:", user);
       // Set the user data immediately to ensure it's available
       queryClient.setQueryData(["/api/user"], user);
       // Then invalidate the query to refresh the data in the background
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      
+      // Verify the session was properly established
+      setTimeout(async () => {
+        try {
+          const verifyResponse = await fetch('/api/user', { 
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' }
+          });
+          console.log("Session verification status:", verifyResponse.status);
+        } catch (e) {
+          console.error("Session verification failed:", e);
+        }
+      }, 100);
+      
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.username}!`,

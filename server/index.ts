@@ -4,6 +4,7 @@ import 'dotenv/config';
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
+import path from "path";
 import { setupAuth } from "./auth.js";
 import { storage } from "./storage.js";
 import { registerRoutes } from "./routes.js";
@@ -11,7 +12,7 @@ import { networkInterfaces } from "os";
 import { setupVite, serveStatic, log } from "./vite.js";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Function to get local IP address
 function getLocalIPAddress(): string {
@@ -113,6 +114,11 @@ async function startServer() {
     // Authentication setup
     setupAuth(app);
 
+    // Serve static files from the uploads directory
+    const uploadsPath = path.join(process.cwd(), 'uploads');
+    console.log('Serving uploads from:', uploadsPath);
+    app.use('/uploads', express.static(uploadsPath));
+    
     // Routes setup
     const server = await registerRoutes(app);
 

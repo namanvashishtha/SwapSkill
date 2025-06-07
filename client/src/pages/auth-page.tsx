@@ -28,9 +28,14 @@ export default function AuthPage() {
 
   // Redirect to dashboard if already logged in
   useEffect(() => {
+    console.log("AuthPage: user state changed:", user);
     if (user) {
-      // Use window.location for a full page reload to ensure proper state
-      window.location.href = "/user-dashboard";
+      console.log("User is authenticated, redirecting to dashboard");
+      // Ensure we're not in a redirect loop before redirecting
+      if (window.location.pathname !== "/user-dashboard") {
+        // Use window.location for a full page reload to ensure proper state
+        window.location.href = "/user-dashboard";
+      }
     }
   }, [user]);
 

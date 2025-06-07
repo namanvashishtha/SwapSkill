@@ -1,6 +1,7 @@
 import { users, type User, type InsertUser } from "../shared/schema.js";
 import session from "express-session";
 import MongoStore from "connect-mongo";
+import { MongoClient, ObjectId, Filter, Document } from "mongodb";
 import { 
   UserModel, 
   SkillModel, 
@@ -15,6 +16,11 @@ import {
   connectToMongoDB, 
   MONGODB_URI 
 } from "./db/mongodb.js";
+
+// Helper function to create properly typed MongoDB filters
+function createFilter<T extends Document>(filter: Record<string, any>): Filter<T> {
+  return filter as Filter<T>;
+}
 
 // Simplified interface for pure MongoDB storage
 export interface IStorage {
@@ -73,11 +79,30 @@ export class MongoStorage implements IStorage {
         secret: process.env.SESSION_SECRET || 'skillswap-session-secret'
       },
       autoRemove: 'native', // Use MongoDB TTL for expired session cleanup
+      autoRemoveInterval: 10, // Check for expired sessions every 10 minutes
       touchAfter: 24 * 3600, // Reduce write operations
       collectionName: 'sessions',
-      stringify: false
-      // Note: Custom session ID generation should be configured in express-session options
+      stringify: false,
+      // Add additional options to handle potential duplicate key issues
+      transformId: (raw) => {
+        // Ensure session IDs are never null
+        return raw || `sess_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      },
+      // Add proper MongoDB client options
+      clientPromise: (async () => {
+        const client = new MongoClient(MONGODB_URI, {
+          maxPoolSize: 10,
+          minPoolSize: 1,
+          socketTimeoutMS: 45000,
+          connectTimeoutMS: 15000,
+          serverSelectionTimeoutMS: 15000,
+        });
+        await client.connect();
+        return client;
+      })()
     });
+    
+    // The session ID generation will be handled by express-session
     console.log('MongoDB session store created');
   }
 
@@ -112,11 +137,71 @@ export class MongoStorage implements IStorage {
       
       console.log('MongoDB connection established');
       
-      // Initialize session store
-      await this.initializeSessionStore();
+      // Track persistent corruption errors
+      let persistentCorruptionErrors = false;
       
-      // Clear any corrupted sessions
-      await this.clearCorruptedSessions();
+      try {
+        // CRITICAL: Directly remove all sessions with null IDs from MongoDB before initializing anything
+        await this.forceRemoveNullIdSessions();
+        
+        // IMPORTANT: Clear any corrupted sessions BEFORE initializing the session store
+        // to prevent duplicate key errors
+        console.log('Pre-emptively cleaning corrupted sessions...');
+        await this.clearCorruptedSessions();
+        
+        // Initialize session store
+        await this.initializeSessionStore();
+        
+        // Clean again to make sure no corrupted sessions were created during initialization
+        await this.clearCorruptedSessions();
+      } catch (sessionError) {
+        if (sessionError instanceof Error && 
+            (sessionError.message.includes('Unable to parse ciphertext') || 
+             sessionError.message.includes('decrypt') || 
+             sessionError.message.includes('crypto'))) {
+          console.error('Detected persistent session corruption issues:', sessionError.message);
+          persistentCorruptionErrors = true;
+        } else {
+          throw sessionError; // Re-throw if it's not a corruption error
+        }
+      }
+      
+      // If we detected persistent corruption, perform a complete purge
+      if (persistentCorruptionErrors) {
+        console.warn('CRITICAL: Persistent session corruption detected. Performing complete session purge...');
+        await this.purgeAllSessions();
+        
+        // Reinitialize the session store after purge
+        try {
+          // Recreate the session store with fresh configuration
+          this.sessionStore = MongoStore.create({
+            mongoUrl: MONGODB_URI,
+            ttl: 60 * 60 * 24,
+            crypto: {
+              secret: process.env.SESSION_SECRET || 'skillswap-session-secret-' + Date.now()
+            },
+            autoRemove: 'native',
+            autoRemoveInterval: 10,
+            touchAfter: 24 * 3600,
+            collectionName: 'sessions',
+            stringify: false,
+            transformId: (raw) => {
+              return raw || `sess_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+            }
+          });
+          
+          console.log('Session store recreated after purge');
+          
+          // Initialize the new session store
+          await this.initializeSessionStore();
+        } catch (reinitError) {
+          console.error('Failed to reinitialize session store after purge:', reinitError);
+          throw reinitError;
+        }
+      }
+      
+      // One final cleanup of null ID sessions after everything is initialized
+      await this.forceRemoveNullIdSessions();
       
       // Set the current ID based on existing data
       await this.initializeCurrentId();
@@ -132,17 +217,245 @@ export class MongoStorage implements IStorage {
     }
   }
   
+  // Direct MongoDB cleanup for sessions with null IDs to prevent duplicate key errors
+  async forceRemoveNullIdSessions(): Promise<void> {
+    try {
+      console.log('Performing direct MongoDB cleanup of sessions with null IDs...');
+      
+      // Connect directly to MongoDB to clean up sessions
+      const client = new MongoClient(MONGODB_URI);
+      await client.connect();
+      const db = client.db();
+      
+      // List of possible session collection names
+      const possibleCollections = ['sessions', 'Sessions', 'session'];
+      
+      for (const collName of possibleCollections) {
+        try {
+          // Check if collection exists
+          const collections = await db.listCollections({ name: collName }).toArray();
+          if (collections.length > 0) {
+            const collection = db.collection(collName);
+            
+            // Remove all documents with id: null
+            const deleteResult = await collection.deleteMany(createFilter<Document>({ id: null }));
+            console.log(`Removed ${deleteResult.deletedCount} sessions with null IDs from ${collName}`);
+            
+            // Also remove documents with _id: null if any exist
+            // Use our helper function to create properly typed filters
+            const deleteIdResult = await collection.deleteMany(createFilter<Document>({ 
+              $or: [
+                { _id: { $exists: false } },
+                { _id: { $type: 10 } }  // 10 is the BSON type for null
+              ]
+            }));
+            
+            if (deleteIdResult.deletedCount > 0) {
+              console.log(`Removed ${deleteIdResult.deletedCount} sessions with null _id from ${collName}`);
+            }
+          }
+        } catch (e) {
+          // Ignore errors if collection doesn't exist
+          console.log(`Collection ${collName} not found or error accessing it`);
+        }
+      }
+      
+      await client.close();
+      console.log('Direct MongoDB cleanup completed');
+    } catch (error) {
+      console.error('Error during direct MongoDB session cleanup:', error);
+      // Don't throw error, try to continue
+    }
+  }
+  
+  // Method to forcibly clear all sessions as a last resort
+  async purgeAllSessions(): Promise<void> {
+    try {
+      console.log('PURGING ALL SESSIONS due to persistent corruption issues...');
+      
+      const client = new MongoClient(MONGODB_URI);
+      await client.connect();
+      const db = client.db();
+      
+      // Try to clean both potential session collections
+      const collections = ['sessions', 'Sessions'];
+      
+      for (const collectionName of collections) {
+        try {
+          const exists = await db.listCollections({ name: collectionName }).toArray();
+          if (exists.length > 0) {
+            // Drop entire collection to completely reset sessions
+            await db.dropCollection(collectionName);
+            console.log(`Dropped entire ${collectionName} collection to resolve persistent session issues`);
+          }
+        } catch (err) {
+          console.log(`Collection ${collectionName} not found or could not be dropped`);
+        }
+      }
+      
+      await client.close();
+      console.log('Session purge complete. All sessions have been cleared.');
+    } catch (error) {
+      console.error('Error during session purge:', error);
+    }
+  }
+  
   // Method to clear corrupted sessions (sessions with null IDs)
   async clearCorruptedSessions(): Promise<void> {
     try {
-      const SessionModel = await this.getSessionModel();
-      if (SessionModel) {
-        // Remove any sessions with null IDs
-        const result = await SessionModel.deleteMany({ id: null });
-        if (result.deletedCount > 0) {
-          console.log(`Cleaned up ${result.deletedCount} corrupted sessions`);
+      console.log('Starting cleanup of corrupted sessions...');
+      
+      // First approach: Try to access sessions collection directly from MongoDB (more reliable method)
+      try {
+        const client = new MongoClient(MONGODB_URI);
+        await client.connect();
+        const db = client.db();
+        
+        // Check for multiple collections that might contain sessions
+        const collections = ['sessions', 'Sessions'];
+        
+        for (const collectionName of collections) {
+          try {
+            const sessionsCollection = db.collection(collectionName);
+            
+            // Remove any sessions with null IDs that would cause duplicate key errors
+            const result = await sessionsCollection.deleteMany(createFilter<Document>({ id: null }));
+            if (result.deletedCount > 0) {
+              console.log(`Cleaned up ${result.deletedCount} corrupted sessions from ${collectionName} collection`);
+            }
+            
+            // Also clean up sessions with invalid _id if any
+            const nullIdResult = await sessionsCollection.deleteMany(createFilter<Document>({ 
+              $or: [
+                { _id: { $exists: false } },
+                { _id: { $type: 10 } }  // 10 is the BSON type for null
+              ] 
+            }));
+            if (nullIdResult.deletedCount > 0) {
+              console.log(`Cleaned up ${nullIdResult.deletedCount} sessions with null _id from ${collectionName} collection`);
+            }
+            
+            // Also clean up sessions that might have corrupted data
+            try {
+              // Find all sessions to check for corruption
+              const allSessions = await sessionsCollection.find({}).toArray();
+              let corruptedCount = 0;
+              
+              for (const session of allSessions) {
+                // Check for signs of corruption in the session data
+                try {
+                  if (
+                    (session.session && typeof session.session === 'string' && 
+                     (session.session.includes('Unable to parse') || !session.session.startsWith('{'))) ||
+                    (session.expires && new Date(session.expires) < new Date())
+                  ) {
+                    // Delete corrupted session
+                    await sessionsCollection.deleteOne({ _id: session._id });
+                    corruptedCount++;
+                  }
+                } catch (parseError) {
+                  // If there's an error checking the session, it's likely corrupted
+                  await sessionsCollection.deleteOne({ _id: session._id });
+                  corruptedCount++;
+                }
+              }
+              
+              if (corruptedCount > 0) {
+                console.log(`Removed ${corruptedCount} corrupted or expired sessions from ${collectionName}`);
+              }
+            } catch (sessionError) {
+              console.error(`Error cleaning corrupted sessions in ${collectionName}:`, sessionError);
+            }
+          } catch (collErr) {
+            console.log(`Collection ${collectionName} not found or could not be accessed`);
+          }
+        }
+        
+        await client.close();
+      } catch (mongoErr) {
+        console.error('Direct MongoDB cleanup failed, trying alternative method:', mongoErr);
+        
+        // Second approach: Using Mongoose model
+        const SessionModel = await this.getSessionModel();
+        if (SessionModel) {
+          // Remove any sessions with null IDs - using type assertion for mongoose
+          const result = await SessionModel.deleteMany({ id: null } as any);
+          if (result.deletedCount > 0) {
+            console.log(`Cleaned up ${result.deletedCount} corrupted sessions using SessionModel`);
+          }
         }
       }
+      
+      // Third approach: Try using the session store directly if available
+      if (this.sessionStore && typeof this.sessionStore.all === 'function') {
+        try {
+          // Using purely callback style for connect-mongo
+          await new Promise<void>((resolve) => {
+            try {
+              // The .all() method in connect-mongo is callback-based
+              this.sessionStore.all((err: Error | null, sessions: Record<string, any> | null) => {
+                if (err) {
+                  console.error('Error retrieving sessions:', err);
+                  return resolve(); // Continue even if we can't get sessions
+                }
+                
+                if (!sessions || typeof sessions !== 'object') {
+                  console.log('No sessions found or invalid sessions object');
+                  return resolve();
+                }
+                
+                let cleaned = 0;
+                const sessionIds = Object.keys(sessions);
+                
+                // No sessions to process
+                if (sessionIds.length === 0) {
+                  return resolve();
+                }
+                
+                // Process each session one by one
+                let processed = 0;
+                
+                sessionIds.forEach((sid) => {
+                  const session = sessions[sid];
+                  
+                  if (!session || session.id === null) {
+                    this.sessionStore.destroy(sid, (destroyErr: Error | null) => {
+                      if (destroyErr) {
+                        console.error(`Error destroying session ${sid}:`, destroyErr);
+                      } else {
+                        cleaned++;
+                      }
+                      
+                      processed++;
+                      if (processed === sessionIds.length) {
+                        if (cleaned > 0) {
+                          console.log(`Cleaned up ${cleaned} corrupted sessions using sessionStore`);
+                        }
+                        resolve();
+                      }
+                    });
+                  } else {
+                    processed++;
+                    if (processed === sessionIds.length) {
+                      if (cleaned > 0) {
+                        console.log(`Cleaned up ${cleaned} corrupted sessions using sessionStore`);
+                      }
+                      resolve();
+                    }
+                  }
+                });
+              });
+            } catch (error) {
+              console.error('Error in session store all() operation:', error);
+              resolve(); // Continue execution even if there's an error
+            }
+          });
+        } catch (storeErr) {
+          console.error('Session store cleanup failed:', storeErr);
+        }
+      }
+      
+      console.log('Corrupted session cleanup completed');
     } catch (error) {
       console.error('Error clearing corrupted sessions:', error);
     }
@@ -165,18 +478,71 @@ export class MongoStorage implements IStorage {
       // First method: Clear expired sessions from the session store
       if (this.sessionStore && typeof this.sessionStore.all === 'function') {
         const now = new Date();
-        const sessions = await this.sessionStore.all();
         
-        // Define a type for session data
-        interface SessionData {
-          expires?: Date | string;
-          [key: string]: any; // Allow other properties
-        }
-        
-        for (const [sid, session] of Object.entries(sessions) as [string, SessionData][]) {
-          if (session.expires && new Date(session.expires) < now) {
-            await this.sessionStore.destroy(sid);
-          }
+        try {
+          // Using purely callback style for connect-mongo
+          await new Promise<void>((resolve) => {
+            try {
+              // The .all() method in connect-mongo is callback-based
+              this.sessionStore.all((err: Error | null, sessions: Record<string, any> | null) => {
+                if (err) {
+                  console.error('Error retrieving sessions:', err);
+                  return resolve(); // Continue even if we can't get sessions
+                }
+                
+                if (!sessions || typeof sessions !== 'object') {
+                  console.log('No sessions found or invalid sessions object');
+                  return resolve();
+                }
+                
+                let expired = 0;
+                const sessionIds = Object.keys(sessions);
+                
+                // No sessions to process
+                if (sessionIds.length === 0) {
+                  return resolve();
+                }
+                
+                // Process each session one by one
+                let processed = 0;
+                
+                sessionIds.forEach((sid) => {
+                  const session = sessions[sid];
+                  
+                  if (session && session.expires && new Date(session.expires) < now) {
+                    this.sessionStore.destroy(sid, (destroyErr: Error | null) => {
+                      if (destroyErr) {
+                        console.error(`Error destroying expired session ${sid}:`, destroyErr);
+                      } else {
+                        expired++;
+                      }
+                      
+                      processed++;
+                      if (processed === sessionIds.length) {
+                        if (expired > 0) {
+                          console.log(`Cleaned up ${expired} expired sessions`);
+                        }
+                        resolve();
+                      }
+                    });
+                  } else {
+                    processed++;
+                    if (processed === sessionIds.length) {
+                      if (expired > 0) {
+                        console.log(`Cleaned up ${expired} expired sessions`);
+                      }
+                      resolve();
+                    }
+                  }
+                });
+              });
+            } catch (error) {
+              console.error('Error in session store all() operation:', error);
+              resolve(); // Continue execution even if there's an error
+            }
+          });
+        } catch (error) {
+          console.error('Error clearing expired sessions from session store:', error);
         }
       }
 
