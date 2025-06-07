@@ -14,34 +14,31 @@ export default function HeroSection() {
         </svg>
       </div>
 
-      <div className="container mx-auto px-6 py-12 relative z-10">
-        <div className="flex flex-col md:flex-row">
+      <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 relative z-10">
+        <div className="flex flex-col md:flex-row md:items-center">
           <motion.div 
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8 }}
-            className="md:w-7/12 space-y-8"
+            className="md:w-7/12 space-y-6 sm:space-y-8"
           >
-            <h1 className="font-poppins font-bold text-4xl md:text-6xl leading-tight">
+            <h1 className="font-poppins font-bold text-3xl sm:text-4xl md:text-6xl leading-tight">
               <span className="typewriter font-extrabold inline-block rainbow-multi-hover">Welcome to SwapSkill</span>
-
-
-
             </h1>
 
-            <p className="text-xl md:text-2xl font-medium max-w-xl text-yellow-400">
+            <p className="text-lg sm:text-xl md:text-2xl font-medium max-w-xl text-yellow-400">
               Got a skill? Need a skill? Let's make the magic happen with SwapSkill
             </p>
 
-            <p className="text-lg max-w-xl">
+            <p className="text-base sm:text-lg max-w-xl">
               Trade talents, learn cool stuff, and meet awesome people!
             </p>
 
-            <div className="flex space-x-4 pt-4">
+            <div className="flex flex-col sm:flex-row sm:space-x-4 pt-4 space-y-3 sm:space-y-0">
               <Link href="/auth" className="inline-block">
                 <Button 
                   size="lg" 
-                  className="bg-white text-primary font-bold hover:bg-gray-100 hover:shadow-lg pop-out-effect"
+                  className="bg-white text-primary font-bold hover:bg-gray-100 hover:shadow-lg pop-out-effect w-full sm:w-auto"
                 >
                   GET STARTED
                 </Button>
@@ -50,7 +47,7 @@ export default function HeroSection() {
                 <Button 
                   size="lg" 
                   variant="outline" 
-                  className="border-2 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white pop-out-effect"
+                  className="border-2 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white pop-out-effect w-full sm:w-auto"
                 >
                   LEARN MORE
                 </Button>
@@ -62,9 +59,9 @@ export default function HeroSection() {
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="md:w-5/12 mt-12 md:mt-0 flex justify-center"
+            className="w-full md:w-5/12 max-w-xs sm:max-w-sm md:max-w-md mt-8 md:mt-0 flex justify-center mx-auto"
           >
-            <div className="relative w-full max-w-md">
+            <div className="relative w-full">
               {/* Hero image */}
               <motion.div 
                 whileHover={{ scale: 1.05 }} 
@@ -83,7 +80,7 @@ export default function HeroSection() {
                 initial={{ rotate: 0 }}
                 animate={{ rotate: 6 }}
                 transition={{ duration: 0.5 }}
-                className="absolute -top-6 -left-6 bg-accent-yellow p-3 rounded-lg shadow-lg pop-out-effect"
+                className="absolute -top-6 -left-6 bg-accent-yellow p-3 rounded-lg shadow-lg pop-out-effect hidden sm:block"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -94,7 +91,7 @@ export default function HeroSection() {
                 initial={{ rotate: 0 }}
                 animate={{ rotate: -6 }}
                 transition={{ duration: 0.5 }}
-                className="absolute -bottom-4 -right-4 bg-accent p-3 rounded-lg shadow-lg pop-out-effect"
+                className="absolute -bottom-4 -right-4 bg-accent p-3 rounded-lg shadow-lg pop-out-effect hidden sm:block"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
