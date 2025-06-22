@@ -1,13 +1,10 @@
-import passport from "passport";
-import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
-import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage.js";
 import { User as SelectUser } from "../shared/schema.js";
 import { z } from "zod";
-import MongoStore from "connect-mongo";
+import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -15,7 +12,9 @@ import { updateUserBioAndImage } from "./db/mongodb.js";
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface Request {
+      user?: SelectUser;
+    }
   }
 }
 
@@ -34,84 +33,37 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-export function setupAuth(app: Express) {
-  // Improved session configuration with better error handling and typing
-  const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "swapskill-secret-key",
-    resave: false, // Don't save session if unmodified
-    saveUninitialized: false, // Don't create session until something is stored
-    store: storage.sessionStore,
-    genid: function(req) {
-      // Generate a unique session ID with timestamp and random string
-      const uniqueId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-      return uniqueId;
-    },
-    cookie: {
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
-      secure: process.env.NODE_ENV === 'production', // Secure in production
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/' // Ensure cookie is available for all paths
-    },
-    name: 'skillswap.sid', // Custom name to avoid conflicts
-    rolling: false, // Don't reset cookie on each request to reduce database writes
-  };
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
-  app.set("trust proxy", 1);
-  app.use(session(sessionSettings));
-  app.use(passport.initialize());
-  app.use(passport.session());
+// Authentication middleware
+function authenticateToken(req: any, res: any, next: any) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
-  passport.use(
-    new LocalStrategy(async (username, password, done) => {
-      try {
-        const user = await storage.getUserByUsername(username);
-        if (!user) {
-          return done(null, false, { message: "Incorrect username" });
-        }
-        
-        const isMatch = await comparePasswords(password, user.password);
-        if (!isMatch) {
-          return done(null, false, { message: "Incorrect password" });
-        }
-        
-        return done(null, user);
-      } catch (error) {
-        return done(error);
-      }
-    }),
-  );
+  if (!token) {
+    return res.status(401).json({ message: 'Access token required' });
+  }
 
-  passport.serializeUser((user: SelectUser, done) => {
-    // Ensure we're using a non-null, unique identifier
-    if (!user || !user.id) {
-      return done(new Error('Invalid user or missing ID'));
+  jwt.verify(token, JWT_SECRET, async (err: any, decoded: any) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid or expired token' });
     }
-    done(null, user.id);
-  });
 
-  passport.deserializeUser(async (id: number, done) => {
     try {
-      // Only fetch user if not already cached in session to reduce database calls
-      const user = await storage.getUser(id);
+      const user = await storage.getUser(decoded.userId);
       if (!user) {
-        return done(new Error('User not found'));
+        return res.status(404).json({ message: 'User not found' });
       }
-      // Ensure all required fields have default values
-      const completeUser = {
-        ...user,
-        skillsToTeach: user.skillsToTeach || [],
-        skillsToLearn: user.skillsToLearn || [],
-        bio: user.bio || '',
-        imageUrl: user.imageUrl || null
-      };
-      done(null, completeUser);
+      req.user = user;
+      next();
     } catch (error) {
-      console.error("Error deserializing user:", error);
-      done(error);
+      console.error('Error fetching user:', error);
+      return res.status(500).json({ message: 'Internal server error' });
     }
   });
+}
 
+export function setupAuthSimple(app: Express) {
   // Login validation schema
   const loginSchema = z.object({
     username: z.string().min(1, "Username is required"),
@@ -146,18 +98,18 @@ export function setupAuth(app: Express) {
         skillsToLearn: req.body.skillsToLearn || [],
       });
 
-      // Automatically log in the user after registration
-      req.login(user, (err) => {
-        if (err) {
-          return next(err);
-        }
-        res.status(201).json({
+      // Generate JWT token
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
+
+      res.status(201).json({
+        token,
+        user: {
           id: user.id,
           username: user.username,
           fullName: user.fullName,
           email: user.email,
           location: user.location,
-        });
+        }
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -167,51 +119,34 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
+  app.post("/api/login", async (req, res, next) => {
     try {
       // Validate login request
-      loginSchema.parse(req.body);
+      const { username, password } = loginSchema.parse(req.body);
       
-      passport.authenticate("local", (err: Error, user: SelectUser, info: any) => {
-        if (err) {
-          console.error("Authentication error:", err);
-          return next(err);
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      const isMatch = await comparePasswords(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      // Generate JWT token
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
+      
+      res.status(200).json({
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          fullName: user.fullName,
+          email: user.email,
+          location: user.location,
         }
-        
-        if (!user) {
-          // More informative error message
-          return res.status(401).json({ 
-            message: info?.message || "Authentication failed" 
-          });
-        }
-        
-        req.login(user, (err) => {
-          if (err) {
-            console.error("Login error:", err);
-            return next(err);
-          }
-          
-          // Explicitly save the session before responding
-          req.session.save((err) => {
-            if (err) {
-              console.error("Session save error:", err);
-              return next(err);
-            }
-            
-            // Sanitize user object before sending
-            const sanitizedUser = {
-              id: user.id,
-              username: user.username,
-              fullName: user.fullName,
-              email: user.email,
-              location: user.location,
-            };
-            
-            console.log("Login successful for user:", user.username, "Session ID:", req.sessionID);
-            return res.status(200).json(sanitizedUser);
-          });
-        });
-      })(req, res, next);
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ errors: error.errors });
@@ -221,27 +156,12 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/logout", (req, res, next) => {
-    req.logout((err) => {
-      if (err) {
-        return next(err);
-      }
-      // Destroy the session completely
-      req.session.destroy((err) => {
-        if (err) {
-          return next(err);
-        }
-        res.clearCookie('skillswap.sid'); // Clear the session cookie
-        res.sendStatus(200);
-      });
-    });
+  app.post("/api/logout", (req, res) => {
+    // With JWT, logout is handled client-side by removing the token
+    res.status(200).json({ message: "Logged out successfully" });
   });
 
-  app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    
+  app.get("/api/user", authenticateToken, (req, res) => {
     // Include all necessary user data including skills, bio and imageUrl
     const sanitizedUser = {
       id: req.user?.id,
@@ -258,10 +178,8 @@ export function setupAuth(app: Express) {
     res.json(sanitizedUser);
   });
   
-  // Add profile update endpoint
-  
+  // File upload setup
   const uploadDir = path.join(process.cwd(), "uploads");
-  // Ensure upload directory exists
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
@@ -283,7 +201,6 @@ export function setupAuth(app: Express) {
       fileSize: 5 * 1024 * 1024, // 5MB limit
     },
     fileFilter: function (req, file, cb) {
-      // Accept only images
       if (file.mimetype.startsWith("image/")) {
         cb(null, true);
       } else {
@@ -292,36 +209,27 @@ export function setupAuth(app: Express) {
     },
   });
   
-  app.post("/api/user/profile", upload.single("image"), async (req, res) => {
+  app.post("/api/user/profile", authenticateToken, upload.single("image"), async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-      
       const userId = req.user?.id;
       const bio = req.body.bio || '';
       
-      // Get image URL if uploaded
       let imageUrl = req.user?.imageUrl || null;
       if (req.file) {
-        // Update to the new image URL (relative to the server)
         imageUrl = `/uploads/${req.file.filename}`;
       }
       
-      // Update user profile
       const success = await updateUserBioAndImage(userId, bio, imageUrl);
       
       if (!success) {
         return res.status(500).json({ message: "Failed to update profile" });
       }
       
-      // Get updated user to return
       const updatedUser = await storage.getUser(userId);
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
       
-      // Return updated user information
       const sanitizedUser = {
         id: updatedUser.id,
         username: updatedUser.username,
@@ -342,4 +250,7 @@ export function setupAuth(app: Express) {
       });
     }
   });
+
+  // Export the authentication middleware so it can be used in routes
+  return { authenticateToken };
 }

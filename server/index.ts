@@ -12,7 +12,7 @@ import { networkInterfaces } from "os";
 import { setupVite, serveStatic, log } from "./vite.js";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // Function to get local IP address
 function getLocalIPAddress(): string {
