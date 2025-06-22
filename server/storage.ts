@@ -104,7 +104,7 @@ export class MongoStorage implements IStorage {
     });
     
     // Add error handling for session store
-    this.sessionStore.on('error', (error) => {
+    this.sessionStore.on('error', (error: Error) => {
       console.error('Session store error:', error);
       // If it's a decryption error, the session will be ignored
       if (error.message.includes('Unable to parse ciphertext')) {
