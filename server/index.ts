@@ -125,14 +125,8 @@ async function startServer() {
     // Global error handling middleware (must be last)
     app.use(errorHandler);
 
-    // Periodic session cleanup (optional)
-    setInterval(async () => {
-      try {
-        await storage.clearExpiredSessions();
-      } catch (error) {
-        console.error('Error during periodic session cleanup:', error);
-      }
-    }, 24 * 60 * 60 * 1000); // Run daily
+    // Periodic session cleanup is handled by MongoDB TTL (Time To Live) automatically
+    // No manual cleanup needed since we configured autoRemove: 'native' in session store
 
     // Vite setup for development
     if (app.get("env") === "development") {

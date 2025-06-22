@@ -14,7 +14,8 @@ import {
   mongoUserToAppUser, 
   appUserToMongoUser, 
   connectToMongoDB, 
-  MONGODB_URI 
+  MONGODB_URI,
+  initializeAvailableSkills
 } from "./db/mongodb.js";
 
 // Helper function to create properly typed MongoDB filters
@@ -102,23 +103,26 @@ export class MongoStorage implements IStorage {
       })()
     });
     
+    // Add error handling for session store
+    this.sessionStore.on('error', (error) => {
+      console.error('Session store error:', error);
+      // If it's a decryption error, the session will be ignored
+      if (error.message.includes('Unable to parse ciphertext')) {
+        console.log('Ignoring corrupted session');
+      }
+    });
+    
     // The session ID generation will be handled by express-session
     console.log('MongoDB session store created');
   }
 
-  // Add a method to handle session-related errors
-  private handleSessionStoreError(error: any) {
-    console.error('Session Store Error:', error);
-    // You might want to implement more sophisticated error handling here
-    // For example, reconnecting to the database or logging the error
-  }
-
-  // Modify the session store initialization to add error handling
+  // Simplified session store initialization
   async initializeSessionStore(): Promise<void> {
     try {
       // Add error event listener to the session store
       this.sessionStore.on('error', (error: any) => {
-        this.handleSessionStoreError(error);
+        console.error('Session Store Error:', error);
+        // Log and continue - don't crash the app
       });
 
       console.log('Session store initialized successfully');
@@ -128,7 +132,7 @@ export class MongoStorage implements IStorage {
     }
   }
 
-  // Modify the initialize method to call initializeSessionStore
+  // Simplified and more reliable initialize method
   async initialize(): Promise<void> {
     try {
       // Connect to MongoDB - this will throw an error if connection fails
@@ -137,77 +141,17 @@ export class MongoStorage implements IStorage {
       
       console.log('MongoDB connection established');
       
-      // Track persistent corruption errors
-      let persistentCorruptionErrors = false;
-      
-      try {
-        // CRITICAL: Directly remove all sessions with null IDs from MongoDB before initializing anything
-        await this.forceRemoveNullIdSessions();
-        
-        // IMPORTANT: Clear any corrupted sessions BEFORE initializing the session store
-        // to prevent duplicate key errors
-        console.log('Pre-emptively cleaning corrupted sessions...');
-        await this.clearCorruptedSessions();
-        
-        // Initialize session store
-        await this.initializeSessionStore();
-        
-        // Clean again to make sure no corrupted sessions were created during initialization
-        await this.clearCorruptedSessions();
-      } catch (sessionError) {
-        if (sessionError instanceof Error && 
-            (sessionError.message.includes('Unable to parse ciphertext') || 
-             sessionError.message.includes('decrypt') || 
-             sessionError.message.includes('crypto'))) {
-          console.error('Detected persistent session corruption issues:', sessionError.message);
-          persistentCorruptionErrors = true;
-        } else {
-          throw sessionError; // Re-throw if it's not a corruption error
-        }
-      }
-      
-      // If we detected persistent corruption, perform a complete purge
-      if (persistentCorruptionErrors) {
-        console.warn('CRITICAL: Persistent session corruption detected. Performing complete session purge...');
-        await this.purgeAllSessions();
-        
-        // Reinitialize the session store after purge
-        try {
-          // Recreate the session store with fresh configuration
-          this.sessionStore = MongoStore.create({
-            mongoUrl: MONGODB_URI,
-            ttl: 60 * 60 * 24,
-            crypto: {
-              secret: process.env.SESSION_SECRET || 'skillswap-session-secret-' + Date.now()
-            },
-            autoRemove: 'native',
-            autoRemoveInterval: 10,
-            touchAfter: 24 * 3600,
-            collectionName: 'sessions',
-            stringify: false,
-            transformId: (raw) => {
-              return raw || `sess_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-            }
-          });
-          
-          console.log('Session store recreated after purge');
-          
-          // Initialize the new session store
-          await this.initializeSessionStore();
-        } catch (reinitError) {
-          console.error('Failed to reinitialize session store after purge:', reinitError);
-          throw reinitError;
-        }
-      }
-      
-      // One final cleanup of null ID sessions after everything is initialized
-      await this.forceRemoveNullIdSessions();
+      // Initialize session store with error handling
+      await this.initializeSessionStore();
       
       // Set the current ID based on existing data
       await this.initializeCurrentId();
       
       // Create initial users if they don't exist
       await this.createInitialUsers();
+      
+      // Initialize available skills if they don't exist
+      await initializeAvailableSkills();
       
       console.log('MongoDB storage initialized successfully');
     } catch (error) {

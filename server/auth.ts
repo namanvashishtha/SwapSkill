@@ -38,8 +38,8 @@ export function setupAuth(app: Express) {
   // Improved session configuration with better error handling and typing
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "swapskill-secret-key",
-    resave: true, // Ensure session is saved on every request
-    saveUninitialized: true, // Create session even if not modified
+    resave: false, // Don't save session if unmodified
+    saveUninitialized: false, // Don't create session until something is stored
     store: storage.sessionStore,
     genid: function(req) {
       // Generate a unique session ID with timestamp and random string
