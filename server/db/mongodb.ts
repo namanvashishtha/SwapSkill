@@ -27,7 +27,7 @@ export async function connectToMongoDB() {
         maxIdleTimeMS: 30000,             // Close connections after 30 seconds of inactivity
         bufferCommands: false,            // Disable mongoose buffering
         retryWrites: true,                // Enable retryable writes
-        w: 'majority',                    // Write concern
+        w: 'majority' as const,           // Write concern
         // Family 4 forces IPv4, which can help with some connection issues
         family: 4,
       });
@@ -36,27 +36,44 @@ export async function connectToMongoDB() {
       console.log('Primary connection attempt failed, trying fallback configuration...');
       console.log('Primary error:', primaryError instanceof Error ? primaryError.message : String(primaryError));
       
-      // Fallback attempt with different settings
-      if (process.env.NODE_ENV === 'development') {
-        try {
-          await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 20000,
-            connectTimeoutMS: 20000,
-            socketTimeoutMS: 60000,
-            maxPoolSize: 5,
-            minPoolSize: 1,
-            bufferCommands: false,
-            retryWrites: true,
-            w: 'majority',
-            // Try without explicit family setting
-          });
-          console.log('Connected using fallback configuration (development mode)');
-        } catch (fallbackError) {
-          console.log('Fallback connection also failed:', fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
+      // Fallback attempt with different settings for both development and production
+      try {
+        const fallbackConfig = {
+          serverSelectionTimeoutMS: process.env.NODE_ENV === 'production' ? 30000 : 20000,
+          connectTimeoutMS: process.env.NODE_ENV === 'production' ? 30000 : 20000,
+          socketTimeoutMS: 60000,
+          maxPoolSize: process.env.NODE_ENV === 'production' ? 5 : 3,
+          minPoolSize: 1,
+          bufferCommands: false,
+          retryWrites: true,
+          w: 'majority' as const,
+          // Try without explicit family setting for better compatibility
+        };
+
+        await mongoose.connect(MONGODB_URI, fallbackConfig);
+        console.log(`Connected using fallback configuration (${process.env.NODE_ENV} mode)`);
+      } catch (fallbackError) {
+        console.error('All connection attempts failed');
+        console.error('Primary error:', primaryError instanceof Error ? primaryError.message : String(primaryError));
+        console.error('Fallback error:', fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
+        
+        // Try one more time with minimal configuration for production
+        if (process.env.NODE_ENV === 'production') {
+          try {
+            console.log('Trying minimal production configuration...');
+            await mongoose.connect(MONGODB_URI, {
+              serverSelectionTimeoutMS: 45000,
+              connectTimeoutMS: 45000,
+              bufferCommands: false,
+            });
+            console.log('Connected using minimal production configuration');
+          } catch (minimalError) {
+            console.error('Minimal configuration also failed:', minimalError instanceof Error ? minimalError.message : String(minimalError));
+            throw primaryError; // Re-throw the original error
+          }
+        } else {
           throw primaryError; // Re-throw the original error
         }
-      } else {
-        throw primaryError; // Re-throw the original error in production
       }
     }
     

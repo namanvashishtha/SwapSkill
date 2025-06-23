@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
-import { setupAuth } from "./auth.js";
+// import setupAuth from "./auth.js";
+import { setupSimpleAuth } from "./auth-simple-new.js";
 import { storage } from "./storage.js";
 import { setupStatusRoutes } from "./routes/status.js";
 import { setupAdminRoutes } from "./routes/admin.js";
@@ -137,13 +138,63 @@ const userNotificationStates = new Map<number, {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
-  setupAuth(app);
+  setupSimpleAuth(app);
   
   // Setup status routes
   setupStatusRoutes(app);
   
   // Setup admin routes
   setupAdminRoutes(app);
+
+  // Add health check endpoint for production debugging
+  app.get("/api/health", async (req, res) => {
+    try {
+      const healthCheck = {
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || "development",
+        memory: process.memoryUsage(),
+        mongodb: "unknown",
+        session: "unknown",
+        users: "unknown"
+      };
+
+      // Test MongoDB connection
+      try {
+        await UserModel.findOne().lean();
+        healthCheck.mongodb = "connected";
+        
+        // Test if we can find the dan user
+        const danUser = await UserModel.findOne({ username: "dan" }).lean();
+        if (danUser) {
+          healthCheck.users = "dan user exists";
+        } else {
+          healthCheck.users = "dan user not found";
+        }
+      } catch (dbError) {
+        healthCheck.mongodb = "error: " + (dbError instanceof Error ? dbError.message : String(dbError));
+      }
+
+      // Test session store
+      try {
+        if (storage.sessionStore) {
+          healthCheck.session = "configured";
+        } else {
+          healthCheck.session = "not configured";
+        }
+      } catch (sessionError) {
+        healthCheck.session = "error: " + (sessionError instanceof Error ? sessionError.message : String(sessionError));
+      }
+
+      res.json(healthCheck);
+    } catch (error) {
+      res.status(500).json({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   // Test endpoint to create sample notifications (for debugging)
   app.post("/api/test/create-notifications", async (req: express.Request, res: express.Response) => {

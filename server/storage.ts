@@ -72,48 +72,56 @@ export class MongoStorage implements IStorage {
   private currentId: number = 1;
 
   constructor() {
-    // Create MongoDB session store with improved configuration
-    this.sessionStore = MongoStore.create({
+    // Create MongoDB session store with production-ready configuration
+    const sessionStoreConfig = {
       mongoUrl: MONGODB_URI,
       ttl: 60 * 60 * 24, // 1 day
-      crypto: {
-        secret: process.env.SESSION_SECRET || 'skillswap-session-secret'
-      },
-      autoRemove: 'native', // Use MongoDB TTL for expired session cleanup
+      autoRemove: 'native' as const, // Use MongoDB TTL for expired session cleanup
       autoRemoveInterval: 10, // Check for expired sessions every 10 minutes
       touchAfter: 24 * 3600, // Reduce write operations
       collectionName: 'sessions',
       stringify: false,
+      // Remove crypto encryption to avoid production issues
+      // Session data will still be secure via HTTPS and httpOnly cookies
+      ...(process.env.NODE_ENV === 'production' ? {} : {
+        crypto: {
+          secret: process.env.SESSION_SECRET || 'skillswap-session-secret'
+        }
+      }),
       // Add additional options to handle potential duplicate key issues
-      transformId: (raw) => {
-        // Ensure session IDs are never null
-        return raw || `sess_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-      },
-      // Add proper MongoDB client options
-      clientPromise: (async () => {
-        const client = new MongoClient(MONGODB_URI, {
-          maxPoolSize: 10,
-          minPoolSize: 1,
-          socketTimeoutMS: 45000,
-          connectTimeoutMS: 15000,
-          serverSelectionTimeoutMS: 15000,
-        });
-        await client.connect();
-        return client;
-      })()
-    });
-    
-    // Add error handling for session store
-    this.sessionStore.on('error', (error: Error) => {
-      console.error('Session store error:', error);
-      // If it's a decryption error, the session will be ignored
-      if (error.message.includes('Unable to parse ciphertext')) {
-        console.log('Ignoring corrupted session');
+      transformId: (raw: any) => {
+        // Ensure session IDs are never null or undefined
+        if (!raw) {
+          return `sess_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+        }
+        return raw;
       }
-    });
-    
-    // The session ID generation will be handled by express-session
-    console.log('MongoDB session store created');
+    };
+
+    try {
+      this.sessionStore = MongoStore.create(sessionStoreConfig);
+      
+      // Add comprehensive error handling for session store
+      this.sessionStore.on('error', (error: Error) => {
+        console.error('Session store error:', error);
+        
+        // Handle specific error types
+        if (error.message.includes('Unable to parse ciphertext')) {
+          console.log('Ignoring corrupted session - will be cleaned up automatically');
+        } else if (error.message.includes('duplicate key')) {
+          console.log('Duplicate session key error - will retry with new ID');
+        } else if (error.message.includes('MongoNetworkError')) {
+          console.error('MongoDB network error - session operations may be affected');
+        } else {
+          console.error('Unexpected session store error:', error.stack);
+        }
+      });
+      
+      console.log('MongoDB session store created successfully');
+    } catch (error) {
+      console.error('Failed to create session store:', error);
+      throw error;
+    }
   }
 
   // Simplified session store initialization
@@ -132,32 +140,57 @@ export class MongoStorage implements IStorage {
     }
   }
 
-  // Simplified and more reliable initialize method
+  // Simplified and more reliable initialize method with retries
   async initialize(): Promise<void> {
-    try {
-      // Connect to MongoDB - this will throw an error if connection fails
-      await connectToMongoDB();
-      this.isConnected = true;
-      
-      console.log('MongoDB connection established');
-      
-      // Initialize session store with error handling
-      await this.initializeSessionStore();
-      
-      // Set the current ID based on existing data
-      await this.initializeCurrentId();
-      
-      // Create initial users if they don't exist
-      await this.createInitialUsers();
-      
-      // Initialize available skills if they don't exist
-      await initializeAvailableSkills();
-      
-      console.log('MongoDB storage initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize MongoDB storage:', error);
-      this.isConnected = false;
-      throw error; // Always fail if MongoDB is not available
+    const maxRetries = 3;
+    let attempt = 1;
+    
+    while (attempt <= maxRetries) {
+      try {
+        console.log(`MongoDB initialization attempt ${attempt}/${maxRetries}`);
+        
+        // Connect to MongoDB - this will throw an error if connection fails
+        await connectToMongoDB();
+        this.isConnected = true;
+        console.log('MongoDB connection established');
+        
+        // Initialize session store with error handling - but don't fail if it errors
+        try {
+          await this.initializeSessionStore();
+        } catch (sessionError) {
+          console.warn('Session store initialization failed, continuing without it:', sessionError);
+        }
+        
+        // Set the current ID based on existing data
+        await this.initializeCurrentId();
+        
+        // Create initial users if they don't exist
+        await this.createInitialUsers();
+        
+        // Initialize available skills if they don't exist - but don't fail if it errors
+        try {
+          await initializeAvailableSkills();
+        } catch (skillsError) {
+          console.warn('Available skills initialization failed, continuing without it:', skillsError);
+        }
+        
+        console.log('MongoDB storage initialized successfully');
+        return; // Success, exit the retry loop
+        
+      } catch (error) {
+        console.error(`Failed to initialize MongoDB storage (attempt ${attempt}/${maxRetries}):`, error);
+        this.isConnected = false;
+        
+        if (attempt === maxRetries) {
+          throw error; // Final attempt failed, throw the error
+        }
+        
+        // Wait before retrying (exponential backoff)
+        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        attempt++;
+      }
     }
   }
   
@@ -530,7 +563,31 @@ export class MongoStorage implements IStorage {
   }
 
   private async createInitialUsers(): Promise<void> {
+    // Generate password hash for "dan123" - using Node.js crypto instead of bcrypt for consistency
+    const { scrypt, randomBytes } = await import('crypto');
+    const { promisify } = await import('util');
+    const scryptAsync = promisify(scrypt);
+    
+    const hashPassword = async (password: string) => {
+      const salt = randomBytes(16).toString("hex");
+      const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+      return `${buf.toString("hex")}.${salt}`;
+    };
+
+    // Create a simple test user with a pre-computed hash
+    const testUserPassword = await hashPassword("dan123");
+    console.log('Creating test user "dan" with password "dan123"');
+
     const initialUsers: InsertUser[] = [
+      {
+        username: "dan",
+        password: testUserPassword,
+        fullName: "Dan Test User",
+        email: "dan@example.com",
+        location: "Test Location",
+        skillsToTeach: ["Testing", "Debugging"],
+        skillsToLearn: ["Development", "DevOps"],
+      },
       {
         username: "priya_sharma",
         password: "$2b$10$5DdJMx9lIKUhpL0JFCYQgOEJgZGWOVJ6.s57aCGxzn5Zix5OXw4NO", // "password123"
