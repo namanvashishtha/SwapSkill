@@ -204,6 +204,11 @@ async function startServer() {
     // Serve static files
     app.use(express.static(staticPath));
     
+    // Serve files from uploads directory
+    const uploadsPath = path.join(process.cwd(), 'uploads');
+    console.log('📁 Uploads path:', uploadsPath);
+    app.use('/uploads', express.static(uploadsPath));
+    
     // Register all API routes from routes.ts
     console.log('� Registering API routes...');
     await registerRoutes(app);

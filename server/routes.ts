@@ -963,6 +963,86 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Update user profile (without image)
+  app.put("/api/user/profile", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      console.log(`Updating profile for user ${userId}`);
+      
+      const { fullName, email, location, skillsToTeach, skillsToLearn, bio } = req.body;
+      
+      // Update user in database
+      const updatedUser = await storage.updateUser(userId, {
+        fullName,
+        email,
+        location,
+        skillsToTeach,
+        skillsToLearn,
+        bio
+      });
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error updating user profile" 
+      });
+    }
+  });
+
+  // Update user profile with image
+  app.post("/api/user/profile", upload.single("image"), async (req: express.Request, res: express.Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in" });
+      }
+      
+      const userId = (req.user as User).id;
+      console.log(`Updating profile with image for user ${userId}`);
+      
+      // Get bio from form data
+      const bio = req.body.bio;
+      
+      // Get the uploaded file
+      const file = req.file;
+      let imageUrl = null;
+      
+      if (file) {
+        // Create a relative URL for the uploaded file
+        imageUrl = `/uploads/${file.filename}`;
+        console.log(`Image uploaded successfully: ${imageUrl}`);
+      }
+      
+      // Update user in database
+      const updatedUser = await storage.updateUser(userId, {
+        bio,
+        imageUrl
+      });
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user profile with image:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error updating user profile with image" 
+      });
+    }
+  });
+
+  // Serve static files from uploads directory
+  app.use('/uploads', express.static(path.resolve(uploadDir as string)));
+
   // Routes registered successfully
   console.log('✅ All routes registered successfully');
 }

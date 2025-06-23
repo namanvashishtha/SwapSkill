@@ -16,9 +16,9 @@ export default function TeamPage() {
       skills: ["Operations", "Community Building", "User Experience"]
     },
     {
-      name: "Dinesh Rawat",
+      name: "Naman Vashishtha",
       role: "Lead Developer",
-      bio: "Dinesh is responsible for SwapSkill's technical infrastructure. He has extensive experience in building scalable web applications and user-friendly interfaces.",
+      bio: "Naman is responsible for SwapSkill's technical infrastructure. He has extensive experience in building scalable web applications and user-friendly interfaces.",
       skills: ["Full-stack Development", "Architecture Design", "Performance Optimization"]
     },
     {
@@ -28,9 +28,9 @@ export default function TeamPage() {
       skills: ["Community Management", "Content Strategy", "User Engagement"]
     },
     {
-      name: "Ram",
+      name: "Anubhav Dixit",
       role: "Growth Marketing Lead",
-      bio: "Ram drives SwapSkill's growth strategies. His data-driven approach helps us reach the right audiences and share our mission with the world.",
+      bio: "Anubhav drives SwapSkill's growth strategies. His data-driven approach helps us reach the right audiences and share our mission with the world.",
       skills: ["Digital Marketing", "Analytics", "Content Creation"]
     },
     {
