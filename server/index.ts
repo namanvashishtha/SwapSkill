@@ -196,6 +196,15 @@ async function startServer() {
     // Step 5: Add essential routes
     console.log('🛣️ Setting up routes...');
 
+    // Serve static files from dist folder (frontend build)
+    const staticPath = path.join(process.cwd(), 'dist');
+    console.log('📁 Static files path:', staticPath);
+    
+    // Serve static files
+    app.use(express.static(staticPath));
+    
+    // API routes are already defined below this point
+
     // Health check endpoint
     app.get('/api/health', async (req, res) => {
       try {
@@ -297,6 +306,25 @@ async function startServer() {
         skillsToLearn: req.user?.skillsToLearn || [],
         bio: req.user?.bio || '',
         imageUrl: req.user?.imageUrl || null
+      });
+    });
+
+    // Catch-all handler: send back React's index.html file for client-side routing
+    app.get('*', (req, res) => {
+      // Don't intercept API routes
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ message: 'API endpoint not found' });
+      }
+      
+      const indexPath = path.join(staticPath, 'index.html');
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error('Error sending index.html:', err);
+          res.status(500).json({ 
+            message: 'Frontend not available. Please build the application first.',
+            hint: 'Run: npm run build'
+          });
+        }
       });
     });
 
