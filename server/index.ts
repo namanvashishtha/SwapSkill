@@ -13,6 +13,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { registerRoutes } from "./routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -193,121 +194,19 @@ async function startServer() {
       }
     });
 
-    // Step 5: Add essential routes
-    console.log('🛣️ Setting up routes...');
+    // Step 5: Set up static files and routes
+    console.log('🛣️ Setting up static files and routes...');
 
-    // Serve static files from dist folder (frontend build)
-    const staticPath = path.join(process.cwd(), 'dist');
+    // Serve static files from dist/public folder (frontend build)
+    const staticPath = path.join(process.cwd(), 'dist', 'public');
     console.log('📁 Static files path:', staticPath);
     
     // Serve static files
     app.use(express.static(staticPath));
     
-    // API routes are already defined below this point
-
-    // Health check endpoint
-    app.get('/api/health', async (req, res) => {
-      try {
-        const health = {
-          status: 'ok',
-          timestamp: new Date().toISOString(),
-          environment: process.env.NODE_ENV,
-          mongodb: 'unknown',
-          testUser: 'unknown'
-        };
-
-        try {
-          const danUser = await storage.getUserByUsername('dan');
-          health.mongodb = 'connected';
-          health.testUser = danUser ? 'dan exists' : 'dan not found';
-        } catch (dbError) {
-          health.mongodb = 'error: ' + (dbError instanceof Error ? dbError.message : String(dbError));
-        }
-
-        res.json(health);
-      } catch (error) {
-        res.status(500).json({
-          status: 'error',
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    });
-
-    // Login endpoint
-    app.post('/api/login', (req, res, next) => {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password required' });
-      }
-
-      console.log(`🔐 Login attempt: ${username}`);
-
-      passport.authenticate('local', (err: any, user: any, info: any) => {
-        if (err) {
-          console.error('💥 Auth error:', err);
-          return res.status(500).json({ 
-            message: 'Authentication error',
-            error: process.env.NODE_ENV === 'production' ? 'Server error' : err.message
-          });
-        }
-
-        if (!user) {
-          console.log('❌ Login failed:', info?.message);
-          return res.status(401).json({ 
-            message: info?.message || 'Invalid credentials' 
-          });
-        }
-
-        req.login(user, (loginErr) => {
-          if (loginErr) {
-            console.error('💥 Login error:', loginErr);
-            return res.status(500).json({ 
-              message: 'Login failed',
-              error: process.env.NODE_ENV === 'production' ? 'Server error' : loginErr.message
-            });
-          }
-
-          console.log(`✅ Login successful: ${user.username}`);
-          res.json({
-            id: user.id,
-            username: user.username,
-            fullName: user.fullName,
-            email: user.email,
-            location: user.location
-          });
-        });
-      })(req, res, next);
-    });
-
-    // Logout endpoint
-    app.post('/api/logout', (req, res) => {
-      req.logout((err) => {
-        if (err) {
-          return res.status(500).json({ message: 'Logout failed' });
-        }
-        res.clearCookie('skillswap.sid');
-        res.json({ message: 'Logged out successfully' });
-      });
-    });
-
-    // User info endpoint
-    app.get('/api/user', (req, res) => {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Not authenticated' });
-      }
-      res.json({
-        id: req.user?.id,
-        username: req.user?.username,
-        fullName: req.user?.fullName,
-        email: req.user?.email,
-        location: req.user?.location,
-        skillsToTeach: req.user?.skillsToTeach || [],
-        skillsToLearn: req.user?.skillsToLearn || [],
-        bio: req.user?.bio || '',
-        imageUrl: req.user?.imageUrl || null
-      });
-    });
+    // Register all API routes from routes.ts
+    console.log('� Registering API routes...');
+    await registerRoutes(app);
 
     // Catch-all handler: send back React's index.html file for client-side routing
     app.get('*', (req, res) => {

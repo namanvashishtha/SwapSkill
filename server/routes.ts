@@ -136,7 +136,7 @@ const userNotificationStates = new Map<number, {
   clearedAt: Date;
 }>();
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<void> {
   // Setup authentication routes
   setupSimpleAuth(app);
   
@@ -963,7 +963,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create HTTP server
-  const server = createServer(app);
-  return server;
+  // Routes registered successfully
+  console.log('✅ All routes registered successfully');
 }
