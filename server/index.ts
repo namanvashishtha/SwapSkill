@@ -14,10 +14,19 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { registerRoutes } from "./routes.js";
+import WebSocketManager from "./websocket.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const scryptAsync = promisify(scrypt);
+
+// Global WebSocket manager instance
+let wsManager: WebSocketManager;
+
+// Export function to get WebSocket manager
+export function getWebSocketManager(): WebSocketManager | undefined {
+  return wsManager;
+}
 
 // Declare types for passport
 declare global {
@@ -239,15 +248,24 @@ async function startServer() {
     console.log('🚀 Starting HTTP server...');
     const server = createServer(app);
     
+    // Step 7: Initialize WebSocket server
+    console.log('🔌 Initializing WebSocket server...');
+    wsManager = new WebSocketManager(server);
+    
     server.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`🌍 Health check: http://localhost:${PORT}/api/health`);
       console.log(`🔐 Login endpoint: http://localhost:${PORT}/api/login`);
+      console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`);
     });
 
     // Graceful shutdown
     process.on('SIGTERM', () => {
       console.log('👋 SIGTERM received, shutting down gracefully');
+      if (wsManager) {
+        wsManager.close();
+        console.log('✅ WebSocket server closed');
+      }
       server.close(() => {
         console.log('✅ HTTP server closed');
         process.exit(0);

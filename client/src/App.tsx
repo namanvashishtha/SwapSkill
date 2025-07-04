@@ -19,6 +19,7 @@ import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import CookiePolicyPage from "@/pages/cookie-policy-page";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { WebSocketProvider } from "@/contexts/websocket-context";
 import { ProtectedRoute } from "@/lib/protected-route";
 import UserDashboard from "@/pages/user-dashboard";
 import ProfileEdit from "@/pages/profile-edit";
@@ -131,15 +132,17 @@ function Router() {
 function App() {
   return (
     <AuthProvider>
-      <NotificationProvider>
-        <ScrollToTop>
-          <DynamicScrollbar />
-          <Navbar />
-          <div className="pt-16"> {/* Add padding to account for fixed navbar */}
-            <Router />
-          </div>
-        </ScrollToTop>
-      </NotificationProvider>
+      <WebSocketProvider>
+        <NotificationProvider>
+          <ScrollToTop>
+            <DynamicScrollbar />
+            <Navbar />
+            <div className="pt-16"> {/* Add padding to account for fixed navbar */}
+              <Router />
+            </div>
+          </ScrollToTop>
+        </NotificationProvider>
+      </WebSocketProvider>
     </AuthProvider>
   );
 }

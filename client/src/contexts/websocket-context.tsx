@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from './use-auth';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { useAuth } from '@/hooks/use-auth';
 
 interface WebSocketMessage {
   type: 'message' | 'match_request' | 'match_response' | 'notification' | 'typing' | 'ping' | 'pong' | 'error';
@@ -23,12 +23,56 @@ interface TypingUser {
   matchId: number;
 }
 
-export function useChat() {
+interface Notification {
+  id: number;
+  userId: number;
+  type: 'match_request' | 'match_accepted' | 'message' | 'session_proposal';
+  title: string;
+  message: string;
+  isRead: boolean;
+  relatedUserId?: number;
+  relatedMatchId?: number;
+  relatedSessionId?: number;
+  createdAt: string;
+}
+
+interface WebSocketContextType {
+  // Connection status
+  isConnected: boolean;
+  connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'error';
+  
+  // Messaging
+  messages: ChatMessage[];
+  sendMessage: (matchId: number, messageText: string) => boolean;
+  getMessagesForMatch: (matchId: number) => ChatMessage[];
+  
+  // Matches
+  sendMatchRequest: (targetUserId: number) => boolean;
+  respondToMatch: (matchId: number, response: 'accepted' | 'rejected') => boolean;
+  
+  // Notifications
+  notifications: Notification[];
+  clearNotifications: () => void;
+  markNotificationAsRead: (notificationId: number) => void;
+  unreadNotificationCount: number;
+  
+  // Typing indicators
+  sendTypingIndicator: (matchId: number, isTyping: boolean) => void;
+  getTypingUsersForMatch: (matchId: number) => TypingUser[];
+  
+  // Utility
+  connect: () => void;
+  disconnect: () => void;
+}
+
+const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
+
+export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
   
@@ -99,6 +143,16 @@ export function useChat() {
     setWs(newWs);
   }, [user, ws?.readyState]);
 
+  const disconnect = useCallback(() => {
+    if (ws) {
+      ws.close(1000, 'Manual disconnect');
+      setWs(null);
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+  }, [ws]);
+
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
     console.log('📨 Received WebSocket message:', message.type, message.data);
 
@@ -131,12 +185,16 @@ export function useChat() {
         if (message.data?.notification) {
           setNotifications(prev => [message.data.notification, ...prev]);
         }
+        // Trigger a refresh of matches list
+        window.dispatchEvent(new CustomEvent('matches-updated'));
         break;
 
       case 'match_response':
         if (message.data?.notification) {
           setNotifications(prev => [message.data.notification, ...prev]);
         }
+        // Trigger a refresh of matches list
+        window.dispatchEvent(new CustomEvent('matches-updated'));
         break;
 
       case 'typing':
@@ -250,11 +308,6 @@ export function useChat() {
     return typingUsers.filter(user => user.matchId === matchId);
   }, [typingUsers]);
 
-  const resetChatCounts = useCallback(() => {
-    // Reset notification counts or any other chat-related counts
-    console.log('🔄 Resetting chat counts');
-  }, []);
-
   const clearNotifications = useCallback(() => {
     setNotifications([]);
   }, []);
@@ -266,6 +319,8 @@ export function useChat() {
       )
     );
   }, []);
+
+  const unreadNotificationCount = notifications.filter(n => !n.isRead).length;
 
   // Connect when user is available
   useEffect(() => {
@@ -286,13 +341,11 @@ export function useChat() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (ws) {
-        ws.close(1000, 'Component unmounting');
-      }
+      disconnect();
     };
-  }, []);
+  }, [disconnect]);
 
-  return {
+  const value: WebSocketContextType = {
     // Connection status
     isConnected,
     connectionStatus,
@@ -310,13 +363,28 @@ export function useChat() {
     notifications,
     clearNotifications,
     markNotificationAsRead,
+    unreadNotificationCount,
     
     // Typing indicators
     sendTypingIndicator,
     getTypingUsersForMatch,
     
     // Utility
-    resetChatCounts,
-    connect
+    connect,
+    disconnect
   };
+
+  return (
+    <WebSocketContext.Provider value={value}>
+      {children}
+    </WebSocketContext.Provider>
+  );
+}
+
+export function useWebSocket() {
+  const context = useContext(WebSocketContext);
+  if (context === undefined) {
+    throw new Error('useWebSocket must be used within a WebSocketProvider');
+  }
+  return context;
 }

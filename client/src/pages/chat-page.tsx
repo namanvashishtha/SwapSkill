@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
-import { useChat } from "@/hooks/use-chat";
+import { useWebSocket } from "@/contexts/websocket-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,14 @@ interface Match {
 export default function ChatPage() {
   const { user, isLoading } = useAuth();
   const { toast } = useToast();
-  const { resetChatCounts } = useChat();
+  const { 
+    isConnected, 
+    connectionStatus,
+    sendMessage: sendWebSocketMessage,
+    getMessagesForMatch,
+    sendTypingIndicator,
+    getTypingUsersForMatch
+  } = useWebSocket();
   const [location] = useLocation();
   const [matches, setMatches] = useState<Match[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
@@ -65,6 +72,7 @@ export default function ChatPage() {
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const [isRatingDialogOpen, setIsRatingDialogOpen] = useState(false);
   const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
   const [showUnmatchDialog, setShowUnmatchDialog] = useState(false);
@@ -85,9 +93,9 @@ export default function ChatPage() {
   // Reset chat counts when page loads
   useEffect(() => {
     if (user) {
-      resetChatCounts();
+      console.log('🔄 Chat page loaded for user:', user.username);
     }
-  }, [user, resetChatCounts]);
+  }, [user]);
 
   // Fetch accepted matches
   useEffect(() => {
@@ -138,7 +146,7 @@ export default function ChatPage() {
     }
   }, [user, toast, matchIdFromUrl]);
 
-  // Fetch messages for selected match
+  // Fetch initial messages for selected match and then use WebSocket for real-time updates
   useEffect(() => {
     const fetchMessages = async () => {
       if (!selectedMatch) return;
@@ -164,6 +172,27 @@ export default function ChatPage() {
 
     fetchMessages();
   }, [selectedMatch]);
+
+  // Update messages from WebSocket
+  useEffect(() => {
+    if (selectedMatch) {
+      const wsMessages = getMessagesForMatch(selectedMatch.id);
+      if (wsMessages.length > 0) {
+        setMessages(prev => {
+          // Merge WebSocket messages with existing messages, avoiding duplicates
+          const merged = [...prev];
+          wsMessages.forEach(wsMsg => {
+            if (!merged.some(msg => msg.id === wsMsg.id)) {
+              merged.push(wsMsg);
+            }
+          });
+          return merged.sort((a, b) => 
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        });
+      }
+    }
+  }, [selectedMatch, getMessagesForMatch]);
 
   // Handle session ID from URL
   useEffect(() => {
@@ -207,22 +236,35 @@ export default function ChatPage() {
     const messageText = newMessage.trim();
     setNewMessage("");
 
+    // Stop typing indicator
+    if (isTyping) {
+      sendTypingIndicator(selectedMatch.id, false);
+      setIsTyping(false);
+    }
+
     try {
-      const response = await fetch(`/api/matches/${selectedMatch.id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: messageText }),
-        credentials: 'include'
-      });
+      // Try WebSocket first
+      if (isConnected && sendWebSocketMessage(selectedMatch.id, messageText)) {
+        console.log('✅ Message sent via WebSocket');
+      } else {
+        // Fallback to REST API
+        console.log('📡 Falling back to REST API for message sending');
+        const response = await fetch(`/api/matches/${selectedMatch.id}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: messageText }),
+          credentials: 'include'
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to send message');
+        if (!response.ok) {
+          throw new Error('Failed to send message');
+        }
+
+        const newMsg = await response.json();
+        setMessages(prev => [...prev, newMsg]);
       }
-
-      const newMsg = await response.json();
-      setMessages(prev => [...prev, newMsg]);
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -240,6 +282,22 @@ export default function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setNewMessage(value);
+
+    // Handle typing indicator
+    if (selectedMatch && isConnected) {
+      if (value.trim() && !isTyping) {
+        setIsTyping(true);
+        sendTypingIndicator(selectedMatch.id, true);
+      } else if (!value.trim() && isTyping) {
+        setIsTyping(false);
+        sendTypingIndicator(selectedMatch.id, false);
+      }
     }
   };
 
@@ -316,7 +374,20 @@ export default function ChatPage() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">Your Matches</h1>
-          <p className="text-gray-600">Chat with your skill exchange partners</p>
+          <div className="flex items-center justify-center space-x-2">
+            <p className="text-gray-600">Chat with your skill exchange partners</p>
+            <div className={`w-3 h-3 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-green-500' : 
+              connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+            }`} title={`Real-time connection: ${connectionStatus}`} />
+          </div>
+          {connectionStatus !== 'connected' && (
+            <p className="text-sm text-gray-500 mt-1">
+              {connectionStatus === 'connecting' ? 'Connecting to real-time service...' : 
+               connectionStatus === 'error' ? 'Connection error - using fallback mode' :
+               'Offline - messages will sync when reconnected'}
+            </p>
+          )}
         </div>
 
         {matches.length === 0 ? (
@@ -394,9 +465,22 @@ export default function ChatPage() {
                           <h3 className="font-semibold text-gray-800">
                             {selectedMatch.otherUser.fullName || selectedMatch.otherUser.username}
                           </h3>
-                          <p className="text-sm text-gray-500">
-                            {selectedMatch.otherUser.skillsToTeach?.length || 0} skills to teach
-                          </p>
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm text-gray-500">
+                              {selectedMatch.otherUser.skillsToTeach?.length || 0} skills to teach
+                            </p>
+                            {/* Connection Status */}
+                            <div className={`w-2 h-2 rounded-full ${
+                              connectionStatus === 'connected' ? 'bg-green-500' : 
+                              connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
+                            }`} title={`WebSocket ${connectionStatus}`} />
+                          </div>
+                          {/* Typing Indicator */}
+                          {selectedMatch && getTypingUsersForMatch(selectedMatch.id).length > 0 && (
+                            <p className="text-xs text-blue-500 italic">
+                              {getTypingUsersForMatch(selectedMatch.id)[0].username} is typing...
+                            </p>
+                          )}
                         </div>
                       </div>
                       
@@ -485,7 +569,7 @@ export default function ChatPage() {
                     <div className="flex space-x-2">
                       <Input
                         value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
+                        onChange={handleInputChange}
                         onKeyPress={handleKeyPress}
                         placeholder="Type your message..."
                         className="flex-1"

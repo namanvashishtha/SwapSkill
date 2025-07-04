@@ -391,7 +391,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - **MongoDB Atlas** - For reliable cloud database hosting
 - **Radix UI Team** - For the incredible accessible component system
-- **Vercel** - For seamless deployment and hosting
+- **Render** - For seamless deployment and hosting
 - **Open Source Community** - For the amazing tools and libraries
 - **Early Users** - For feedback and feature suggestions
 - **Everyone** who has contributed to making SkillSwap better
