@@ -90,12 +90,18 @@ export default function ChatPage() {
 
   console.log("ChatPage: URL params - matchIdFromUrl:", matchIdFromUrl, "sessionIdFromUrl:", sessionIdFromUrl);
 
-  // Reset chat counts when page loads
+  // Reset chat counts when page loads and ensure WebSocket connection
   useEffect(() => {
     if (user) {
       console.log('🔄 Chat page loaded for user:', user.username);
+      
+      // Ensure WebSocket connection is active
+      if (!isConnected && connectionStatus !== 'connecting') {
+        console.log('🔌 Reconnecting WebSocket from chat page');
+        sendWebSocketMessage(0, ''); // This will trigger a reconnect if needed
+      }
     }
-  }, [user]);
+  }, [user, isConnected, connectionStatus, sendWebSocketMessage]);
 
   // Fetch accepted matches
   useEffect(() => {
@@ -193,6 +199,45 @@ export default function ChatPage() {
       }
     }
   }, [selectedMatch, getMessagesForMatch]);
+  
+  // Listen for new messages event
+  useEffect(() => {
+    const handleNewMessage = (event: CustomEvent) => {
+      if (selectedMatch && event.detail.matchId === selectedMatch.id) {
+        console.log('🔔 New message event received for match:', selectedMatch.id);
+        const wsMessages = getMessagesForMatch(selectedMatch.id);
+        
+        // Force a re-render with the latest messages
+        setMessages(prev => {
+          // Merge WebSocket messages with existing messages, avoiding duplicates
+          const merged = [...prev];
+          let hasNewMessages = false;
+          
+          wsMessages.forEach(wsMsg => {
+            if (!merged.some(msg => msg.id === wsMsg.id)) {
+              merged.push(wsMsg);
+              hasNewMessages = true;
+            }
+          });
+          
+          if (!hasNewMessages) return prev; // No changes needed
+          
+          console.log('💬 Adding new messages to chat view');
+          return merged.sort((a, b) => 
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        });
+      }
+    };
+
+    // Add event listener
+    window.addEventListener('new-message', handleNewMessage as EventListener);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('new-message', handleNewMessage as EventListener);
+    };
+  }, [selectedMatch, getMessagesForMatch]);
 
   // Handle session ID from URL
   useEffect(() => {
@@ -246,6 +291,8 @@ export default function ChatPage() {
       // Try WebSocket first
       if (isConnected && sendWebSocketMessage(selectedMatch.id, messageText)) {
         console.log('✅ Message sent via WebSocket');
+        
+        // We don't need to manually update messages here as the WebSocket event will handle it
       } else {
         // Fallback to REST API
         console.log('📡 Falling back to REST API for message sending');
@@ -263,7 +310,17 @@ export default function ChatPage() {
         }
 
         const newMsg = await response.json();
-        setMessages(prev => [...prev, newMsg]);
+        
+        // Update messages with the new message from the API
+        setMessages(prev => {
+          const merged = [...prev];
+          if (!merged.some(msg => msg.id === newMsg.id)) {
+            merged.push(newMsg);
+          }
+          return merged.sort((a, b) => 
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        });
       }
     } catch (error) {
       console.error('Error sending message:', error);

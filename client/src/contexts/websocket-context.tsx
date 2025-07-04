@@ -164,9 +164,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
             const exists = prev.some(msg => msg.id === message.data.id);
             if (exists) return prev;
             
-            return [...prev, message.data].sort((a, b) => 
+            // Create a new array to ensure React detects the change
+            const newMessages = [...prev, message.data].sort((a, b) => 
               new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
             );
+            
+            // Dispatch an event to notify components about new messages
+            // Use requestAnimationFrame to ensure the state update has completed
+            requestAnimationFrame(() => {
+              window.dispatchEvent(new CustomEvent('new-message', { 
+                detail: { matchId: message.data.matchId }
+              }));
+            });
+            
+            return newMessages;
           });
         }
         break;
@@ -301,6 +312,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   }, [ws]);
 
   const getMessagesForMatch = useCallback((matchId: number) => {
+    // This will always return the latest messages from the state
     return messages.filter(msg => msg.matchId === matchId);
   }, [messages]);
 
@@ -324,9 +336,17 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   // Connect when user is available
   useEffect(() => {
-    if (user && !ws) {
+    if (user && (!ws || ws.readyState !== WebSocket.OPEN)) {
+      console.log('🔄 Initializing WebSocket connection for user:', user.id);
       connect();
     }
+
+    // Ping the server every 30 seconds to keep the connection alive
+    const pingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
 
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -335,8 +355,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
+      clearInterval(pingInterval);
     };
-  }, [user, connect]);
+  }, [user, connect, ws]);
 
   // Cleanup on unmount
   useEffect(() => {
