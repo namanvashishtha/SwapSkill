@@ -3,7 +3,7 @@
 
 A cutting-edge full-stack application that connects passionate learners and teachers through intelligent skill matching. Built with modern web technologies and advanced user experience design.
 
-![SkillSwap Platform](https://swapskill-fj8w.onrender.com)
+!(https://swapskill-fj8w.onrender.com)
 
 ## ✨ Unique Features
 
